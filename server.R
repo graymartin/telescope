@@ -7,13 +7,56 @@
 #    http://shiny.rstudio.com/
 #
 
-#source("utilities.R", local = TRUE)
 cat_select_list <- category_select_list()
+cou_select_list <- country_select_list()
 dat_select_list <- dataset_select_list()
 
 # Define server logic required to draw a histogram
 server <- shinyServer(function(input, output) {
 
+    # Read in selected datasets 
+    get_raw_data_list <- reactive({
+      req(input$dataset)
+      
+      raw_data_list <- list()
+      
+      for (d in input$dataset) {
+        d_name <- names(dat_select_list)[dat_select_list == d]
+        if (length(d_name) == 0) {
+          d_name = d
+        }
+        
+        # Filter categories
+        dataset <- 
+          data.table::fread(d)
+        
+        if (str_ends(d_name, ".csv")) {
+          dataset <-
+            dataset %>%
+            mutate(dataset_name = basename(d_name)) %>% 
+            mutate(type = dirname(d_name)) %>% 
+            mutate(type = case_when(type == "." ~ "Other", 
+                                    TRUE ~ type))
+        } else if (str_ends(d_name, coll(")"), )) {
+          dataset <-
+            dataset %>%
+            mutate(dataset_name = d_name) %>% 
+            mutate(type = str_split_i(d_name, coll("("), 1))
+        } else {
+          dataset <-
+            dataset %>%
+            mutate(dataset_name = basename(d_name)) %>% 
+            mutate(type = "Other")
+        }
+        
+        raw_data_list[[d]] <- dataset
+      }
+      
+      raw_data_list
+    })
+    
+    get_raw_data_list_debounced <- get_raw_data_list %>% debounce(1000)
+  
     # Build table of data sources
     build_table <- reactive({
       req(input$category)
@@ -21,16 +64,12 @@ server <- shinyServer(function(input, output) {
 
       # Iterate over datasets in list
       data_list <- list()
-      for (d in input$dataset) {
-        d_name <- names(dat_select_list)[dat_select_list == d]
-        if (length(d_name) == 0) {
-          d_name = d
-        }
-
+      raw_data_list <- get_raw_data_list_debounced()
+      for (dataset in raw_data_list) {
         dataset <-
-          read.csv(d) %>%
-          mutate(dataset_name = d_name)
-
+          dataset %>% 
+          dplyr::filter(category %in% input$category)
+        
         years_list <- c(1900:2500)
         years_list <- c(years_list, paste0("X", years_list), as.character(years_list))
 
@@ -39,75 +78,33 @@ server <- shinyServer(function(input, output) {
           dataset <-
             pivot_longer(dataset, names_to = "year", cols = any_of(years_list)) %>%
             mutate(value = suppressWarnings(as.numeric(gsub(",", "", value)))) %>%
-            mutate(year = as.numeric(str_sub(year, -4))) %>%
-            mutate(type = "GHGI") # All wide data are flagged as historical/GHGI
-
-        } else {
-          dataset <-
-            dataset %>%
-            mutate(type = "Projections") # All long data are flagged as projections
+            mutate(year = as.numeric(str_sub(year, -4))) 
         }
-
-        # Add a scenario column if none exists in dataset
-        if (!("scenario" %in% names(dataset))) {
-          dataset$scenario <- "None"
-        }
-
-        # Handle different units in dataset (add manual exceptions as needed)
-        if (("kt" %in% dataset$unit) | ("MT" %in% dataset$unit)) {
-          dataset <-
-            dataset %>%
-            mutate(value = case_when(unit == "MT" ~ value * 1000,
-                                     TRUE ~ value)) %>%
-            mutate(unit = case_when(unit == "MT" ~ "kt",
-                                    TRUE ~ unit)) %>%
-            filter(!is.na(unit)) %>%
-            filter(unit != "") %>%
-            gwp_convert_to_MMTCO2e()
-        }
-
-        # Remove totals from categories with other gases or filter to totals only
-        if (("Total" %in% dataset$gas) & !("Totals only" %in% input$options)) {
-          dataset <-
-            dataset %>%
-            filter(gas != "Total")
-
-        } else if (("Total" %in% dataset$gas) & ("Totals only" %in% input$options)) {
-          dataset <-
-            dataset %>%
-            filter(gas == "Total")
-        }
+        
+        # Filter years outside of chosen range
+        dataset <-
+          dataset %>%
+          dplyr::filter((year >= as.numeric(str_sub(input$year_range[[1]], 1, 4))) &
+                          (year <= as.numeric(str_sub(input$year_range[[2]], 1, 4))))
 
         # Allow filtering out CO2 from display
         if (("CO2" %in% dataset$gas) & !("Include CO2" %in% input$options)) {
           dataset <-
             dataset %>%
-            filter(gas != "CO2")
+            dplyr::filter(gas != "CO2")
         }
 
-        # Handle duplicated data rows in GHGI by taking only first row
-        if ("table" %in% names(dataset)) {
-          dataset <-
-            dataset %>%
-            group_by(gas, unit, category, year, .drop = FALSE) %>%
-            slice_head(n = 1)
-        }
-
-        data_list[[d]] <- dataset
+        data_list <- c(data_list, list(dataset))
       }
 
       # Create main DataFrame from datasets in list
       data <-
-        bind_rows(data_list, .id = "dataset_source") %>%
-        filter(category %in% input$category) %>%
-        filter((scenario %in% input$scenario) | (scenario == "None")) %>%
-        filter((year >= as.numeric(str_sub(input$year_range[[1]], 1, 4))) &
-                 (year <= as.numeric(str_sub(input$year_range[[2]], 1, 4))))
-
+        bind_rows(data_list, .id = "dataset_source")
+      
       if ("Aggregate categories" %in% input$groupoptions) {
         data <-
           data %>%
-          group_by(dataset_source, dataset_name, year, unit, gas, scenario, type) %>%
+          group_by(dataset_source, dataset_name, year, unit, gas, type) %>%
           summarize(value = sum(value, na.rm = TRUE),
                     category = "Aggregate",
                     .groups = "keep")
@@ -118,6 +115,12 @@ server <- shinyServer(function(input, output) {
     })
 
     summarize_table <- reactive({
+      if ("All countries" %in% input$country) {
+        countryfilter <- expression(!is.na(country))
+      } else {
+        countryfilter <- expression(country %in% input$country)
+      }
+      
       if ("Break out gases" %in% input$groupoptions) {
         groupby_list <- c("dataset_name", "category", "dataset_source", "type", "year", "unit", "gas")
       } else {
@@ -126,10 +129,11 @@ server <- shinyServer(function(input, output) {
 
       data <-
         build_table() %>%
+        dplyr::filter(eval(countryfilter)) %>% 
         group_by_at(groupby_list) %>%
         summarize(value = sum(value, na.rm = TRUE), .groups = "keep") %>%
         ungroup()
-
+      
       data
     })
 
@@ -143,7 +147,7 @@ server <- shinyServer(function(input, output) {
       color <- ""
 
       base <- ggplot(data, aes(x = year, y = value, group = interaction(category, dataset_name), color = interaction(dataset_name))) +
-        geom_line(data = data, size = 0.8, lineend = "round", aes(linetype = interaction(type))) +
+        geom_line(data = data, size = 0.8, lineend = "round", aes(linetype = type)) +
         geom_textline(alpha = 1, text_only = TRUE, aes(label = category), hjust = 1, text_smoothing = 50, vjust = -0.75, size = 3, show.legend = FALSE, remove_long = TRUE) +
         theme_light(base_size = 10)
 

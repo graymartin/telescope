@@ -9,6 +9,7 @@
 
 #source("utilities.R", local = TRUE)
 cat_select_list <- category_select_list()
+cou_select_list <- country_select_list()
 dat_select_list <- dataset_select_list()
 
 # Define UI for application that draws a histogram
@@ -36,27 +37,19 @@ ui <- shinyUI(fluidPage(
               choices = dat_select_list
             ),
 
-            checkboxGroupInput(
-              "scenario",
-              "Scenarios",
-              choices = list("Historical" = "historical",
-                             "WM" = "WM",
-                             "WM-lowseq" = "WM-lowseq",
-                             "WM-highseq" = "WM-highseq"),
-              selected = c("historical", "WM")),
-
             selectInput(
               "category",
               "Categories",
               choices = cat_select_list,
               multiple = TRUE),
 
-            # checkboxGroupInput(
-            #   "showcategoryoptions",
-            #   NULL,
-            #   choices = list("Show all categories" = "show_all"),
-            #   selected = list("Show all categories")
-            # ),
+            selectInput(
+              "country",
+              "Countries",
+              choices = c("All countries", cou_select_list),
+              multiple = TRUE,
+              selected = list("All countries")
+            ),
 
             radioButtons(
               "groupoptions",
@@ -72,8 +65,7 @@ ui <- shinyUI(fluidPage(
               "Options",
               choices = list("Start y axis at 0" = "Start y axis at 0",
                              #"Compare scenarios" = "Compare scenarios",
-                             "Include CO2" = "Include CO2",
-                             "Totals only" = "Totals only"),
+                             "Include CO2" = "Include CO2"),
               selected = list("Start y axis at 0", "Include CO2")
             ),
 
