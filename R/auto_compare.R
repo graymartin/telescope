@@ -250,11 +250,13 @@ write_comparison <- function(compare_dfs, filepath) {
 }
 
 # Comparisons -------------------------------------------------------------
-# dat_comp_list <- dataset_compare_list()
-# 
-# em_2024 <- read_dataset(dat_comp_list$`Emissions Data (2024)`)
-# em_2022 <- read_dataset(dat_comp_list$`Emissions Data (2022)`)
-# 
-# comp_em_2022_2024 <- compare_df(em_2022, em_2024)
-# #write_comparison(comp_em_2022_2024, "./validation/other/comp_em_2022_2024.xlsx")
+if (FALSE) {
+  dat_comp_list <- dataset_compare_list()
+  
+  em_2024 <- read_dataset(dat_comp_list$`Emissions Data (2024)`)
+  em_2022 <- read_dataset(dat_comp_list$`Emissions Data (2022)`)
+  
+  comp_em_2022_2024 <- compare_df(em_2022, em_2024)
+  write_comparison(comp_em_2022_2024, "./output/usproj/comp_em_2022_2024.xlsx")
+}
 
