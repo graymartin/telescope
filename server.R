@@ -61,8 +61,8 @@ server <- shinyServer(function(input, output) {
                                      TRUE ~ value)) %>%
             mutate(unit = case_when(unit == "MT" ~ "kt",
                                     TRUE ~ unit)) %>%
-            filter(!is.na(unit)) %>%
-            filter(unit != "") %>%
+            dplyr::filter(!is.na(unit)) %>%
+            dplyr::filter(unit != "") %>%
             gwp_convert_to_MMTCO2e()
         }
 
@@ -70,19 +70,19 @@ server <- shinyServer(function(input, output) {
         if (("Total" %in% dataset$gas) & !("Totals only" %in% input$options)) {
           dataset <-
             dataset %>%
-            filter(gas != "Total")
+            dplyr::filter(gas != "Total")
 
         } else if (("Total" %in% dataset$gas) & ("Totals only" %in% input$options)) {
           dataset <-
             dataset %>%
-            filter(gas == "Total")
+            dplyr::filter(gas == "Total")
         }
 
         # Allow filtering out CO2 from display
         if (("CO2" %in% dataset$gas) & !("Include CO2" %in% input$options)) {
           dataset <-
             dataset %>%
-            filter(gas != "CO2")
+            dplyr::filter(gas != "CO2")
         }
 
         # Handle duplicated data rows in GHGI by taking only first row
@@ -99,9 +99,9 @@ server <- shinyServer(function(input, output) {
       # Create main DataFrame from datasets in list
       data <-
         bind_rows(data_list, .id = "dataset_source") %>%
-        filter(category %in% input$category) %>%
-        filter((scenario %in% input$scenario) | (scenario == "None")) %>%
-        filter((year >= as.numeric(str_sub(input$year_range[[1]], 1, 4))) &
+        dplyr::filter(category %in% input$category) %>%
+        dplyr::filter((scenario %in% input$scenario) | (scenario == "None")) %>%
+        dplyr::filter((year >= as.numeric(str_sub(input$year_range[[1]], 1, 4))) &
                  (year <= as.numeric(str_sub(input$year_range[[2]], 1, 4))))
 
       if ("Aggregate categories" %in% input$groupoptions) {
