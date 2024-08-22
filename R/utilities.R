@@ -62,7 +62,8 @@ dataset_select_list <- function() {
   composite_datasets <- list(
     "Emissions (2024)" = "./data/RGER 2024/composite_categories_2024.csv",
     "Emissions (2023)" = "./data/RGER 2023/composite_categories_2023.csv",
-    "Emissions (2019)" = "./data/RGER 2019/GER2019_composite_summary.csv"
+    "Emissions (2019)" = "./data/RGER 2019/composite_categories_2019.csv",
+    "Emissions Summary (2019)" = "./data/RGER 2019/GER2019_composite_summary.csv"
   )
   
   unfccc_raw_datasets <- list(
@@ -74,8 +75,12 @@ dataset_select_list <- function() {
     "Interpolated UNFCCC (2024)" = "./data/RGER 2024/UNFCCC_interpolated_2024.csv",
     "Interpolated UNFCCC (2023)" = "./data/RGER 2023/UNFCCC_interpolated_2023.csv"
   )
+  
+  crf_datasets <- list(
+    "CRF (2024)" = "./data/CRF 2024/CRF_2024.csv"
+  )
 
-  return(c(composite_datasets, unfccc_raw_datasets, unfccc_int_datasets, input_datasets))
+  return(c(composite_datasets, unfccc_raw_datasets, unfccc_int_datasets, crf_datasets, input_datasets))
 }
 
 style_plot <- function(baseplot, xaxis="", yaxis="", fill="", ...) {
@@ -83,6 +88,7 @@ style_plot <- function(baseplot, xaxis="", yaxis="", fill="", ...) {
   styled <-
     baseplot +
     labs(x = xaxis, y = yaxis, fill = fill) +
+    guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
     theme(legend.position = "bottom",
           legend.title = element_blank(),
           axis.line.y = element_blank(),

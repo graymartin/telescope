@@ -65,6 +65,7 @@ ui <- shinyUI(fluidPage(
               "Options",
               choices = list("Start y axis at 0" = "Start y axis at 0",
                              #"Compare scenarios" = "Compare scenarios",
+                             #"Adjust emissions to AR5" = "Adjust emissions to AR5"
                              "Include CO2" = "Include CO2"),
               selected = list("Start y axis at 0", "Include CO2")
             ),

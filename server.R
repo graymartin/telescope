@@ -28,7 +28,8 @@ server <- shinyServer(function(input, output) {
         
         # Filter categories
         dataset <- 
-          data.table::fread(d)
+          data.table::fread(d) %>% 
+          select(-any_of(c("dataset_source"))) 
         
         if (str_ends(d_name, ".csv")) {
           dataset <-
@@ -49,13 +50,29 @@ server <- shinyServer(function(input, output) {
             mutate(type = "Other")
         }
         
+        release_year <- as.numeric(str_extract(d_name, "(?<=\\().*(?=\\))"))
+        
+        dataset <- 
+          dataset %>% 
+          mutate(release_year = release_year)
+        
+        if (("Adjust emissions to AR5" %in% input$options) & (release_year < 2024)) {
+          ar4toar5 <- readRDS("./config/ar4toar5.rds")
+          
+          dataset <-
+            dataset %>% 
+            left_join(ar4toar5, by = "gas") %>% 
+            mutate(value = if_else(!is.na(AR4_to_AR5), value * AR4_to_AR5, value)) %>% 
+            select(-AR4_to_AR5)
+        }
+        
         raw_data_list[[d]] <- dataset
       }
       
       raw_data_list
     })
     
-    get_raw_data_list_debounced <- get_raw_data_list %>% debounce(1000)
+    get_raw_data_list_debounced <- get_raw_data_list %>% throttle(100)
   
     # Build table of data sources
     build_table <- reactive({
@@ -104,7 +121,7 @@ server <- shinyServer(function(input, output) {
       if ("Aggregate categories" %in% input$groupoptions) {
         data <-
           data %>%
-          group_by(dataset_source, dataset_name, year, unit, gas, type) %>%
+          group_by(dataset_source, dataset_name, country, year, unit, gas, type) %>%
           summarize(value = sum(value, na.rm = TRUE),
                     category = "Aggregate",
                     .groups = "keep")
@@ -191,6 +208,7 @@ server <- shinyServer(function(input, output) {
     output$wideSummaryTable <- DT::renderDataTable({
       predata <-
         summarize_table() %>%
+        select(-any_of(c("dataset_source"))) %>% 
         pivot_wider(names_from = "year", values_from = "value")
 
       yearcols <- names(predata)[names(predata) %in%  as.character(c(1900:2100))]
