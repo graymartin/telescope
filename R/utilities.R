@@ -107,3 +107,20 @@ gwp_convert_to_MMTCO2e <- function(x,
   x %>%
     mutate(res_data)
 }
+
+style_plot <- function(baseplot, xaxis="", yaxis="", fill="", ...) {
+  
+  styled <-
+    baseplot +
+    labs(x = xaxis, y = yaxis, fill = fill) +
+    guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
+    theme(legend.position = "bottom",
+          legend.title = element_blank(),
+          axis.line.y = element_blank(),
+          axis.line = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(size = 14, colour = "#007BA7", face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(size = 12, colour = "#007BA7", hjust = 0.5),
+          plot.caption = element_text(size = 10, colour = "#007BA7", face = "bold"))
+  styled
+}
