@@ -89,9 +89,47 @@ compare_df <- function(prev_df, comp_df, scenarios = c("historical", "WM")) {
     mutate(ext_studentized_deviation = abs(scaled_deviation/ext_sd_deviation)) %>%
     dplyr::ungroup() %>%
     mutate_at(vars(-group_cols()), function(x) ifelse(is.nan(x) | is.infinite(x), NA, x))
+  
+  # Direct comparison between previous and current values
+  agg_difference_rows <-
+    matching_rows %>%
+    group_by(category) %>%
+    dplyr::filter(if (any(c("CH4", "CO2", "N2O", "PFCs", "SF6", "HFCs", "NF3") %in% gas)) gas != "Total" else gas == "Total") %>%
+    dplyr::ungroup() %>%
+    group_by(category, gas, year, unit) %>% 
+    summarize(value = sum(value, na.rm = TRUE),
+              prevvalue = sum(prevvalue, na.rm = TRUE)) %>% 
+    ungroup() %>%
+    mutate(difference = value - prevvalue) %>%
+    mutate(abs_difference = abs(difference)) %>%
+    mutate(percent_difference = difference/prevvalue) %>%
+    mutate(abs_percent_difference = abs(percent_difference)) %>%
+    mutate(fraction = (1 + percent_difference)) %>%
+    group_by(category, gas, unit) %>%
+    mutate(average_prevvalue = mean(prevvalue)) %>%
+    mutate(average_value = mean(value)) %>%
+    mutate(average_difference = mean(value) - mean(prevvalue)) %>%
+    mutate(total_difference = sum(value) - sum(prevvalue)) %>%
+    mutate(abs_total_difference = abs(total_difference)) %>%
+    group_by(category, unit, year) %>%
+    mutate(deviation = sum(value) - sum(prevvalue)) %>%
+    mutate(percent_deviation = deviation/sum(prevvalue)) %>%
+    mutate(abs_percent_deviation = abs(percent_deviation)) %>%
+    group_by(category, unit) %>%
+    mutate(scaled_deviation = scale(deviation)[, 1]) %>%
+    mutate(sd_deviation = sd(scaled_deviation, na.rm = TRUE)) %>%
+    mutate(ext_sd_deviation = sd(scaled_deviation[-which.max(scaled_deviation)], na.rm = TRUE)) %>%
+    mutate(studentized_deviation = abs(scaled_deviation/sd_deviation)) %>%
+    mutate(ext_studentized_deviation = abs(scaled_deviation/ext_sd_deviation)) %>%
+    dplyr::ungroup() %>%
+    mutate_at(vars(-group_cols()), function(x) ifelse(is.nan(x) | is.infinite(x), NA, x))
 
   trend_rows <-
     matching_rows %>%
+    group_by(category, gas, year, unit) %>% 
+    summarize(value = sum(value, na.rm = TRUE),
+              prevvalue = sum(prevvalue, na.rm = TRUE)) %>% 
+    ungroup() %>% 
     mutate(value = case_when(is.na(value) ~ 0,
                              TRUE ~ value))
 
@@ -102,6 +140,7 @@ compare_df <- function(prev_df, comp_df, scenarios = c("historical", "WM")) {
                       "Additional rows" = additional_rows,
                       # "Possible matches" = possible_rows,
                       "Difference summary" = difference_rows,
+                      "Aggregated summary" = agg_difference_rows,
                       "Trends and spikes" = trends_and_spikes,
                       "Column values" = value_checks)
 
@@ -118,7 +157,7 @@ trends_df <- function(trend_df) {
   trend_rows <-
     trend_df %>%
     arrange(category, gas, year) %>%
-    group_by(country, category, gas, unit) %>%
+    group_by(category, gas, unit) %>%
     # First-order difference
     mutate(lag_difference = value - lag(value, order_by = year)) %>%
     mutate(percent_lag_difference = lag_difference/lag(value, order_by = year)) %>%
@@ -210,7 +249,7 @@ write_comparison <- function(compare_dfs, filepath) {
   openxlsx::addWorksheet(wb, "Notes")
 
   max_diff_df <-
-    compare_dfs$`Difference summary` %>%
+    compare_dfs$`Aggregated summary` %>%
     dplyr::filter(year > last_historic_year) %>%
     rename("Category" = "category") %>%
     group_by(Category) %>%
@@ -239,7 +278,9 @@ if (FALSE) {
 
   em_2024 <- 
     read_dataset(dat_comp_list$`Emissions (2024)`) %>% 
-    select(-any_of(c("nonproportional_value")))
+    select(-any_of(c("nonproportional_value"))) %>% 
+    mutate(value = case_when(category == "EPS" ~ value/1000,
+                             TRUE ~ value)) # TODO: Fix this
     
   em_2022 <- 
     read_dataset(dat_comp_list$`Emissions (2019)`) %>% 
