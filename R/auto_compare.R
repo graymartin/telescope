@@ -6,13 +6,13 @@ compare_df <- function(prev_df, comp_df, scenarios = c("historical", "WM")) {
   # Filter to include relevant scenarios and drop scenario column
   if ("scenario" %in% colnames(prev_df)) {
     prev_df <-
-      filter(prev_df, scenario %in% scenarios) %>%
+      dplyr::filter(prev_df, scenario %in% scenarios) %>%
       select(-scenario)
   }
 
   if ("scenario" %in% colnames(comp_df)) {
     comp_df <-
-      filter(comp_df, scenario %in% scenarios) %>%
+      dplyr::filter(comp_df, scenario %in% scenarios) %>%
       select(-scenario)
   }
 
@@ -64,7 +64,7 @@ compare_df <- function(prev_df, comp_df, scenarios = c("historical", "WM")) {
   difference_rows <-
     matching_rows %>%
     group_by(category) %>%
-    filter(if (any(c("CH4", "CO2", "N2O", "PFCs", "SF6", "HFCs", "NF3") %in% gas)) gas != "Total" else gas == "Total") %>%
+    dplyr::filter(if (any(c("CH4", "CO2", "N2O", "PFCs", "SF6", "HFCs", "NF3") %in% gas)) gas != "Total" else gas == "Total") %>%
     ungroup() %>%
     mutate(difference = value - prevvalue) %>%
     mutate(abs_difference = abs(difference)) %>%
@@ -136,14 +136,14 @@ find_spikes <- function(df, threshold = 3) {
   for (c in unique(df$category)) {
     cat_rows <-
       df %>%
-      filter(category == c) %>%
+      dplyr::filter(category == c) %>%
       arrange(year)
 
     gas_list <- list()
     for (g in unique(cat_rows$gas)) {
       gas_rows <-
         cat_rows %>%
-        filter(gas == g)
+        dplyr::filter(gas == g)
 
       vals <- pull(gas_rows, value)
       baseyear <- min(gas_rows$year)
@@ -180,9 +180,9 @@ find_spikes <- function(df, threshold = 3) {
 
 dataset_compare_list <- function() {
   emissions_datasets <- list(
-    "Emissions Data (2024)" = "./output/2024NCBR/usproj_emissions_2024.csv",
-    "Emissions Data (2022)" = "./output/2022NCBR/usproj_emissions_2022.csv",
-    "Emissions Data (2021)" = "./output/2021NCBR/usproj_emissions.csv"
+    "Emissions Data (2024)" = "./data/2024NCBR/usproj_emissions_2024.csv",
+    "Emissions Data (2022)" = "./data/2022NCBR/usproj_emissions_2022.csv",
+    "Emissions Data (2021)" = "./data/2021NCBR/usproj_emissions.csv"
   )
 
   ghgi_datasets <- list(
@@ -227,10 +227,10 @@ write_comparison <- function(compare_dfs, filepath) {
 
   max_diff_df <-
     compare_dfs$`Difference summary` %>%
-    filter(year > last_historic_year) %>%
+    dplyr::filter(year > last_historic_year) %>%
     rename("Category" = "category") %>%
     group_by(Category) %>%
-    filter(if (any(c("CH4", "CO2", "N2O", "PFCs", "SF6", "HFCs", "NF3") %in% gas)) gas != "Total" else gas == "Total") %>%
+    dplyr::filter(if (any(c("CH4", "CO2", "N2O", "PFCs", "SF6", "HFCs", "NF3") %in% gas)) gas != "Total" else gas == "Total") %>%
     summarize(`Maximum studentized deviation` = max(ext_studentized_deviation, na.rm = TRUE),
               `Percent deviation` = abs_percent_deviation[which.max(ext_studentized_deviation)],
               `Deviation` = deviation[which.max(ext_studentized_deviation)],
@@ -257,6 +257,6 @@ if (FALSE) {
   em_2022 <- read_dataset(dat_comp_list$`Emissions Data (2022)`)
   
   comp_em_2022_2024 <- compare_df(em_2022, em_2024)
-  write_comparison(comp_em_2022_2024, "./output/usproj/comp_em_2022_2024.xlsx")
+  #write_comparison(comp_em_2022_2024, "./output/usproj/comp_em_2022_2024.xlsx")
 }
 
