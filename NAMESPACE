@@ -1,0 +1,19 @@
+exportPattern("^[[:alpha:]]+")
+
+## Data manipulation ----
+import(readxl)
+import(stringr)
+import(dplyr)
+import(tidyverse)
+import(tidyr)
+import(magrittr)
+import(DT)
+import(purrr)
+
+## Visualization ----
+import(ggplot2)
+import(geomtextpath)
+
+## Shiny ----
+import(shiny)
+import(bslib)
