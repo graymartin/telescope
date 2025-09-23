@@ -19,66 +19,58 @@ fb_sidebar_options <- list(
     max = "2200-01-01",
     format = "yyyy"),
 
-  card(
-    #card_header("Data series"),
-    selectInput("fb_variable", "Variable",
-                choices = config_variable(),
+  selectInput("fb_variable", "Variable",
+              choices = config_variable(),
+              multiple = TRUE),
+  
+  layout_columns(
+    selectInput("fb_models", "Model",
+                choices = config_model(),
+                multiple = TRUE),
+    # Sort by model or filter to selected models
+    selectInput("fb_scenarios", "Scenario",
+                choices = config_scenario(),
                 multiple = TRUE)
   ),
-  card(
-    #card_header("Model selection"),
-    layout_columns(
-      selectInput("fb_models", "Model",
-                  choices = config_model(),
-                  multiple = TRUE),
-      # Sort by model or filter to selected models
-      selectInput("fb_scenarios", "Scenario",
-                  choices = config_scenario(),
-                  multiple = TRUE)
-    ),
-    layout_columns(
-      selectInput("fb_regions", "Region",
-                  choices = config_region(),
-                  multiple = TRUE),
-      # Sort by model or filter to selected models
-      selectInput("fb_color", "Color group",
-                  choices = c("variable", "scenario", "model", "region"))
-    )
+      
+  layout_columns(
+    selectInput("fb_regions", "Region",
+                choices = config_region(),
+                multiple = TRUE),
+    # Sort by model or filter to selected models
+    selectInput("fb_color", "Color group",
+                choices = c("variable", "scenario", "model", "region"))
   ),
-  card(
-    #card_header("Axes variables"),
-    layout_columns(
-      # Constrain to different values
-      selectInput("fb_x", "Horizontal (x) axis",
-                  choices = dplyr::filter(config_axes(), axes == "x")$options),
-      selectInput("fb_y", "Vertical (y) axis",
-                  choices = dplyr::filter(config_axes(), axes == "y")$options)
-    ),
-    layout_columns(
-      # Constrain to different values
-      selectInput("fb_facet1", "Horizontal facet",
-                  choices = c("None" = "", "scenario", "model", "region")),
-      selectInput("fb_facet2", "Vertical facet",
-                  choices = c("None" = "", "scenario", "model", "region"))
-    )
+  
+  layout_columns(
+    # Constrain to different values
+    selectInput("fb_x", "Horizontal (x) axis",
+                choices = dplyr::filter(config_axes(), axes == "x")$options),
+    selectInput("fb_y", "Vertical (y) axis",
+                choices = dplyr::filter(config_axes(), axes == "y")$options)
+  ),
+  
+  layout_columns(
+    # Constrain to different values
+    selectInput("fb_facet1", "Horizontal facet",
+                choices = c("None" = "", "scenario", "model", "region")),
+    selectInput("fb_facet2", "Vertical facet",
+                choices = c("None" = "", "scenario", "model", "region"))
   ),
 
-  card(
-    #card_header("Figure details"),
-    layout_columns(
-      textInput("fb_title_name", "Figure title"),
-      # Autogenerate based on variable choice or from mapping
-      numericInput("fb_figure_no", "Figure number", value = 1)
-    ),
-    layout_columns(
-      actionButton(
-        "fb_figure_save",
-        "Save Mapping"),
-      downloadButton(
-        "fb_figure_download",
-        "Download Mapping"
-      )
-    )
+  layout_columns(
+    textInput("fb_title_name", "Figure title"),
+    # Autogenerate based on variable choice or from mapping
+    numericInput("fb_figure_no", "Figure number", value = 1)
+  ),
+  
+  layout_columns(
+    actionButton(
+      "fb_figure_save",
+      "Save Mapping"),
+    downloadButton(
+      "fb_figure_download",
+      "Download Mapping")
   )
 )
 
@@ -161,19 +153,31 @@ de_sidebar_options <- list(
     selected = list("All scenarios")
   ),
   
-  radioButtons(
-    "de_grouping",
-    NULL,
-    choices = list("No grouping" = "",
-                   "Group by model" = "Group by model",
-                   "Aggregate variables" = "Aggregate variables")
+  layout_columns(
+    # Constrain to different values
+    selectInput("de_facet1", "Horizontal facet",
+                choices = c("None" = "", "scenario", "model", "region", "variable")),
+    selectInput("de_facet2", "Vertical facet",
+                choices = c("None" = "", "scenario", "model", "region", "variable"))
   ),
   
-  checkboxGroupInput(
-    "de_options",
-    "Options",
-    choices = list("Start y axis at 0" = "Start y axis at 0"),
-    selected = list("Start y axis at 0")
+  layout_columns(
+    radioButtons(
+      "de_grouping",
+      NULL,
+      choices = list("Group by model" = "Group by model",
+                     "Group by scenario" = "Group by scenario",
+                     "Group by region" = "Group by region",
+                     "Group by variable" = "Group by variable")
+    ),
+    
+    checkboxGroupInput(
+      "de_options",
+      NULL,
+      choices = list("Start y axis at 0" = "Start y axis at 0",
+                     "Aggregate variables" = "Aggregate variables"),
+      selected = list("Start y axis at 0", "Aggregate variables")
+    )
   )
 )
 

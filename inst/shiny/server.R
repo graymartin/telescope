@@ -285,12 +285,10 @@ server <- shinyServer(function(input, output, session) {
       var_f = input$de_variable
     )
     
-    if ("Group by model" %in% input$de_grouping) {
-      de_df <- df
-    } else if ("Aggregate variables" %in% input$de_grouping) {
+    if ("Aggregate variables" %in% input$de_options) {
       de_df <- 
         df %>% 
-        filter(variable %in% input$de_variable) %>% 
+        dplyr::filter(variable %in% input$de_variable) %>% 
         group_by(across(c(-variable, -value))) %>% 
         summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>% 
         ungroup() %>% 
@@ -311,12 +309,19 @@ server <- shinyServer(function(input, output, session) {
     
     if ("Group by model" %in% input$de_grouping) {
       de_color <- "model"
-      de_variable <- input$de_variable
-    } else if ("Aggregate variables" %in% input$de_grouping) {
-      de_color <- "model"
-      de_variable <- "Aggregated"
+    } else if ("Group by scenario" %in% input$de_grouping) {
+      de_color <- "scenario"
+    } else if ("Group by region" %in% input$de_grouping) {
+      de_color <- "region"
+    } else if ("Group by variable" %in% input$de_grouping) {
+      de_color <- "variable"
     } else {
       de_color <- "variable"
+    }
+    
+    if ("Aggregate variables" %in% input$de_options) {
+      de_variable <- "Aggregated"
+    } else {
       de_variable <- input$de_variable
     }
     
@@ -332,8 +337,12 @@ server <- shinyServer(function(input, output, session) {
                      fb_years = s_de_years(),
                      fb_scenarios = input$de_scenarios,
                      fb_variable = de_variable,
-                     fb_facet1 = "",
-                     fb_facet2 = "")
+                     fb_facet1 = input$de_facet1,
+                     fb_facet2 = input$de_facet2)
+    
+    if ("Start y axis at 0" %in% input$de_options) {
+      plot <- plot + expand_limits(y = 0)
+    }
     
     return(plot)
   })
