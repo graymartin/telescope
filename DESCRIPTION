@@ -1,6 +1,8 @@
 Package: telescope
 Type: Package
 Title: Visualize and compare projected emissions data
+Description: Visualize and compare projected emissions data
+License: use_mit_license()
 Version: 2.1.0
 Authors@R: c(
     person("Gray", "Martin", email = "researchgray@gmail.com", role = c("aut", "cre"))
