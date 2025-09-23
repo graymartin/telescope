@@ -15,6 +15,7 @@ Imports:
   dplyr,
   tidyverse,
   tidyr,
+  readr,
   ggplot2,
   geomtextpath,
   magrittr,

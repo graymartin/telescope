@@ -7,7 +7,7 @@ fb_sidebar_options <- list(
     "Figure type",
     choices = list_figure_type(),
     multiple = FALSE
-  ),
+    ),
 
   dateRangeInput(
     "fb_years",
@@ -21,11 +21,9 @@ fb_sidebar_options <- list(
 
   card(
     #card_header("Data series"),
-    layout_columns(col_widths = c(8, 4),
-      selectInput("fb_variable", "Variable",
-                  choices = config_variable(),
-                  multiple = TRUE)
-    )
+    selectInput("fb_variable", "Variable",
+                choices = config_variable(),
+                multiple = TRUE)
   ),
   card(
     #card_header("Model selection"),
@@ -72,9 +70,14 @@ fb_sidebar_options <- list(
       # Autogenerate based on variable choice or from mapping
       numericInput("fb_figure_no", "Figure number", value = 1)
     ),
-    actionButton(
-      "fb_figure_download",
-      "Download Figure File"
+    layout_columns(
+      actionButton(
+        "fb_figure_save",
+        "Save Mapping"),
+      downloadButton(
+        "fb_figure_download",
+        "Download Mapping"
+      )
     )
   )
 )
@@ -83,7 +86,7 @@ fb_sidebar_options <- list(
 
 fb_sidebar <- sidebar(id = "fb_sidebar", fb_sidebar_options, width = "30%")
 fb_workbook <- nav_panel("Parameters", plotOutput("p_fb_figure", height = "600px"))
-fb_output <- nav_panel("Data", DT::DTOutput("t_fb_data"))
+fb_output <- nav_panel("Filtered data", DT::DTOutput("t_fb_data"))
 fb_data <- nav_panel("Output", DT::DTOutput("t_fb_rows"))
 #fb_debug <- nav_panel("Debug", DT::DTOutput("t_fb_debug"))
 
@@ -93,8 +96,96 @@ figureBuilder <- nav_panel("Figure builder",
                                             !!!figureBuilderContent,
                                             full_screen = TRUE))
 
-## Data viewer ----
-dataExplorer <- nav_panel("Figure explorer", "Content")
+## Set viewer ----
+fs_sidebar_options <- list(
+  actionButton("navbar_analysis_select", "Select analysis"),
+  textOutput("s_fs_data")
+)
+fs_sidebar <- sidebar(id = "fs_sidebar", fs_sidebar_options, width = "20%")
+fs_figureset <- nav_panel("Saved figures", DT::DTOutput("t_fs_data"))
+figureSetContent <- list(fs_figureset)
+
+figureSet <- nav_panel("Set viewer", navset_card_pill(sidebar = fs_sidebar,
+                                                              !!!figureSetContent,
+                                                              full_screen = TRUE))
+
+## Data explorer ----
+de_sidebar_options <- list(
+  dateRangeInput(
+    "de_years",
+    "Years",
+    startview = "decade",
+    start = "2000-01-01",
+    end = "2050-01-01",
+    min = "1900-01-01",
+    max = "2200-01-01",
+    format = "yyyy"),
+  
+  selectInput(
+    "de_dataset",
+    "Datasets",
+    choices = config_dataset(),
+    multiple = TRUE
+  ),
+  
+  selectInput(
+    "de_models",
+    "Models",
+    # TODO: Make dependent on de_dataset
+    choices = NULL,
+    multiple = TRUE
+  ),
+  
+  selectInput(
+    "de_variable",
+    "Variables",
+    # TODO: Make dependent on de_dataset
+    choices = NULL,
+    multiple = TRUE),
+  
+  selectInput(
+    "de_regions",
+    "Regions",
+    # TODO: Make dependent on de_dataset
+    choices = NULL,
+    multiple = TRUE,
+    selected = list("All regions")
+  ),
+  
+  selectInput(
+    "de_scenarios",
+    "Scenarios",
+    # TODO: Make dependent on de_dataset
+    choices = NULL,
+    multiple = TRUE,
+    selected = list("All scenarios")
+  ),
+  
+  radioButtons(
+    "de_grouping",
+    NULL,
+    choices = list("No grouping" = "",
+                   "Group by model" = "Group by model",
+                   "Aggregate variables" = "Aggregate variables")
+  ),
+  
+  checkboxGroupInput(
+    "de_options",
+    "Options",
+    choices = list("Start y axis at 0" = "Start y axis at 0"),
+    selected = list("Start y axis at 0")
+  )
+)
+
+de_sidebar <- sidebar(id = "de_sidebar", de_sidebar_options, width = "30%")
+de_figureset <- nav_panel("Plot", plotOutput("p_de_figure"))
+de_filtereddataview <- nav_panel("Filtered data", DT::DTOutput("t_de_filtered_data"))
+de_dataview <- nav_panel("Full data", DT::DTOutput("t_de_data"))
+dataExplorerContent <- list(de_figureset, de_filtereddataview, de_dataview)
+
+dataExplorer <- nav_panel("Data explorer", navset_card_pill(sidebar = de_sidebar,
+                                                              !!!dataExplorerContent,
+                                                              full_screen = TRUE))
 
 ## Main UI ----
 ui <- page_fluid(
@@ -106,7 +197,11 @@ ui <- page_fluid(
 
   page_navbar(
     figureBuilder,
+    figureSet,
     dataExplorer,
+    nav_spacer(),
+    nav_item(textOutput("navbar_analysis_text")),
+    nav_item(actionButton("navbar_analysis_select", "Select analysis")), 
     title = "Telescope",
     id = "page",
     fillable = TRUE

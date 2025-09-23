@@ -1,7 +1,7 @@
 # Static config -----------------------------------------------------------
 load_file_config <- function(filename) {
   file <- system.file("config", filename, package = "telescope")
-  return(read.csv(file))
+  return(read_csv(file, col_types = cols(.default = col_character()), na = character()))
 }
 
 ## Parameter-specific config loading ----
@@ -75,8 +75,53 @@ config_region <- function(df = getOption("telescope.default_dataframe", default 
   return(as.list(unique(df$region)))
 }
 
+config_analysis <- function() {
+  dir <- system.file("output", "figure", package = "telescope")
+  return(list.dirs(dir, full.names = FALSE, recursive = FALSE))
+}
+
+check_dataset <- function() {
+  dir <- system.file("input", "dataset", package = "telescope")
+  files <- list.files(dir, full.names = FALSE, recursive = TRUE)
+  return(files)
+}
+
+config_dataset <- function() {
+  files <- check_dataset()
+  
+  for (f in files) {
+    if (!grepl("/", f)) {
+      files[files == f] <- paste0("Other/", f)
+    }
+  }
+  
+  df <- 
+    as.data.frame(purrr::list_transpose(strsplit(files, "/")), 
+                  col.names = c("folder", "file"))
+  
+  l_files <- list()
+  for (fl in unique(df$folder)) {
+    df_f <- 
+      dplyr::filter(df, folder == fl)
+    
+    l_f <- list()
+    for (r in 1:nrow(df_f)) {
+      filename <- df_f[[r, "file"]]
+      if (fl != "Other") {
+        l_f[[filename]] <- paste0(fl, "/", filename)
+      } else {
+        l_f[[filename]] <- filename
+      }
+    }
+    
+    l_files[[fl]] <- l_f
+  }
+  
+  return(l_files)
+}
+
 # Figure mappings ---------------------------------------------------------
-var_to_fig <- function(figtype,
+var_to_figdf <- function(figtype,
                        fb_title_name,
                        fb_figure_no,
                        fb_x,
@@ -108,15 +153,38 @@ var_to_fig <- function(figtype,
   df_fig <-
     tibble::enframe(l_fig) %>%
     tidyr::pivot_wider() %>%
-    unnest(fb_regions) %>%
-    unnest(fb_models) %>%
-    unnest(fb_scenarios) %>%
-    unnest(fb_variable) %>%
+    unnest(regions) %>%
+    unnest(models) %>%
+    unnest(scenarios) %>%
+    unnest(variable) %>%
     as.data.frame()
+  
+  df_fig <- apply(df_fig, 2, as.character)
 
   return(df_fig)
 }
 
-fig_to_var <- function(df, figure_no) {
+load_file_map <- function(analysis, filename) {
+  file <- system.file("output", "figure", analysis, filename, package = "telescope")
+  return(read_csv(file, col_types = cols(.default = col_character()), na = character()))
+}
 
+analysis_to_figdf <- function(analysis = "default") {
+  dir <- system.file("output", "figure", analysis, package = "telescope")
+  analysis_files <- list.files(dir, full.names = FALSE, recursive = FALSE)
+  analysis_data <- list()
+  for (filename in analysis_files) {
+    analysis_filemap <- load_file_map(analysis = analysis, filename = filename)
+    analysis_data[[filename]] <- analysis_filemap
+  }
+  
+  figdf <- 
+    bind_rows(analysis_data, .id = "source") %>% 
+    mutate(analysis = analysis) %>% 
+    relocate(analysis)
+  
+  file <- system.file("output", "intermediate", package = "telescope")
+  saveRDS(figdf, file = paste0(file, "/", "fs_set_data.rds"))
+  
+  return(figdf)
 }
