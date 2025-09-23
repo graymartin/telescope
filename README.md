@@ -1,0 +1,1 @@
+To run, use the `telescope()` function. If R complains, you may need to run `devtools::load_all()` to bring the `telescope` package into the environment. In theory, you should be able to build and install the package too.
