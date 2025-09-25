@@ -1,3 +1,4 @@
 ﻿figure_type,required,optional,inherits
 base,"figure_no, title_name, regions, models, years, scenarios, variable, color",,
 timeseries,"x, y","facet1, facet2",base
+MACC,"x, y","facet1, facet2",base

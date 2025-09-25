@@ -16,10 +16,13 @@ plotting <- function(df,
                      fb_scenarios,
                      fb_variable,
                      fb_facet1 = "",
-                     fb_facet2 = "") {
+                     fb_facet2 = "",
+                     fb_options = "") {
+  
   # Figure details (string)
   title <- fb_title_name
   figure <- fb_figure_no
+  options <- strsplit(fb_options, split = ", ")[[1]]
 
   # Column names (string)
   x_col <- fb_x
@@ -34,7 +37,14 @@ plotting <- function(df,
   sce_f <- fb_scenarios
   var_f <- fb_variable
 
-  df <- plotting_filter(df, reg_f = reg_f, mod_f = mod_f, yrs_f = yrs_f, sce_f = sce_f, var_f = var_f)
+  df <- plotting_filter(df, 
+                        reg_f = reg_f, 
+                        mod_f = mod_f, 
+                        yrs_f = yrs_f, 
+                        sce_f = sce_f, 
+                        var_f = var_f,
+                        y_col = y_col,
+                        options_list = options)
 
   # Facet variables (string)
   if ((fb_facet1 == "") & (fb_facet2 == "")) {
@@ -55,14 +65,29 @@ plotting <- function(df,
   # Plot type
   if (figtype == "timeseries") {
     plot <- plotting_line(plot, df)
+  } else if (figtype == "MACC") {
+    plot <- plotting_macc(plot, df)
   }
 
   if (f_n > 0) {
-    plot <- plotting_facet(plot, f1_col, f2_col)
+    if ("Fix vertical facet scale" %in% options) {
+      plot <- plotting_facet(plot, f1_col, f2_col, scale = "free_x")
+    } else {
+      plot <- plotting_facet(plot, f1_col, f2_col, scale = "free")
+    }
   }
 
   # Style plot
   plot <- plotting_style(plot, x_lab = "", y_lab = "")
+  
+  if ("Start y axis at 0" %in% options) {
+    plot <- plot + expand_limits(y = 0)
+  }
+  
+  if (figtype == "MACC") {
+    bar <- plotting_macc_bar(df)
+    plot <- cowplot::plot_grid(plotlist = c(plot, bar), nrow = 2, rel_heights = c(15, 1), align = "v")
+  }
 
   return(plot)
 }
@@ -75,12 +100,25 @@ plotting <- function(df,
   }
 }
 
-plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f) {
+plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f, y_col, options_list) {
   df <-
     df %>%
     dplyr::filter((region %annull% reg_f) & (model %annull% mod_f) & (scenario %annull% sce_f) & (variable %annull% var_f)) %>%
     dplyr::filter((year >= as.numeric(str_sub(yrs_f, 1, 4))) & (year <= as.numeric(str_sub(yrs_f, 6, 9))))
 
+  if ("Aggregate variables" %in% options_list) {
+    df <- 
+      df %>% 
+      group_by(across(c(-variable, -!!sym(y_col)))) %>% 
+      summarize(!!sym(y_col) := sum(!!sym(y_col), na.rm = TRUE), .groups = "drop") %>% 
+      ungroup() %>% 
+      mutate(variable = "Aggregated")
+  }
+  
+  if (y_col == "p") {
+    df <- arrange(df, p)
+  }
+  
   return(df)
 }
 
@@ -103,7 +141,45 @@ plotting_line <- function(plot, df, label_lines = NULL) {
   return(line)
 }
 
-plotting_facet <- function(plot, f1, f2 = "", scale = "free_x") {
+plotting_macc <- function(plot, df) {
+  line <- plot +
+    geom_line(data = df, size = 0.8, lineend = "round")
+  
+  return(line)
+}
+
+plotting_macc_bar <- function(df) {
+  p_min <- min(df$p, na.rm = TRUE)
+  p_max <- max(df$p, na.rm = TRUE) 
+  
+  baseline <- unique(df$baseline)[[1]]
+  tech_feasi <- max(df$Q, na.rm = TRUE)
+  abt_le_zero <- max(df[df$p <= 0, ]$Q, na.rm = TRUE)
+  
+  b_f <- 1.0
+  t_f <- tech_feasi/baseline
+  a_f <- abt_le_zero/baseline
+  
+  bar_data <- data.frame(
+    name = c("b", "t", "a"),
+    length = c(b_f, t_f, a_f)
+  )
+  
+  bar <- ggplot(data = bar_data) +
+    geom_col(aes(x = length, y = "", fill = name), position = "identity") +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank()) +
+    guides(fill = "none") +
+    theme_void()
+  
+  return(bar)
+}
+
+plotting_facet <- function(plot, f1, f2, scale) {
   if(f2  == "") {
     facet <- plot +
       facet_wrap(as.formula(paste("~", f1)))

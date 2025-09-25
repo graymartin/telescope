@@ -121,20 +121,23 @@ config_dataset <- function() {
 }
 
 # Figure mappings ---------------------------------------------------------
-var_to_figdf <- function(figtype,
-                       fb_title_name,
-                       fb_figure_no,
-                       fb_x,
-                       fb_y,
-                       fb_color,
-                       fb_regions,
-                       fb_models,
-                       fb_years,
-                       fb_scenarios,
-                       fb_variable,
-                       fb_facet1 = "",
-                       fb_facet2 = "") {
+var_to_figdf <- function(dataset,
+                         figtype,
+                         fb_title_name,
+                         fb_figure_no,
+                         fb_x,
+                         fb_y,
+                         fb_color,
+                         fb_regions,
+                         fb_models,
+                         fb_years,
+                         fb_scenarios,
+                         fb_variable,
+                         fb_facet1 = "",
+                         fb_facet2 = "",
+                         fb_options = "") {
   l_fig <- list(
+    "dataset" = dataset,
     "figtype" = figtype,
     "title_name" = fb_title_name,
     "figure_no" = fb_figure_no,
@@ -147,7 +150,8 @@ var_to_figdf <- function(figtype,
     "scenarios" = fb_scenarios,
     "variable" = fb_variable,
     "facet1" = fb_facet1,
-    "facet2" = fb_facet2
+    "facet2" = fb_facet2,
+    "options" = fb_options
   )
 
   df_fig <-
@@ -160,6 +164,8 @@ var_to_figdf <- function(figtype,
     as.data.frame()
   
   df_fig <- apply(df_fig, 2, as.character)
+  
+  df_fig <- as.data.frame(df_fig)
 
   return(df_fig)
 }
@@ -188,3 +194,23 @@ analysis_to_figdf <- function(analysis = "default") {
   
   return(figdf)
 }
+
+# Input data manipulation -------------------------------------------------
+# Read MACC data aggregated to USREP regions
+read_agg_macc <- function(filename = "sub_data_v2.csv") {
+  file <- system.file("data-raw", "MACC", filename, package = "telescope")
+  data <- read_csv(file)
+  
+  data <-
+    data %>% 
+    mutate(model = ghg) %>% 
+    mutate(scenario = as.character(year)) %>% 
+    mutate(unit = ghg) %>% 
+    mutate(year = year) %>% 
+    mutate(variable = paste0(usrep_sector)) %>% 
+    mutate(region = region) %>% 
+    select(-any_of(c("usrep_sector", "ghg")))
+  
+  return(data)
+}
+

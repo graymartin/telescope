@@ -10,6 +10,7 @@ import(magrittr)
 import(DT)
 import(purrr)
 import(readr)
+import(cowplot)
 
 ## Visualization ----
 import(ggplot2)

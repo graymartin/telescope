@@ -1,37 +1,28 @@
 
 
 # Setup -------------------------------------------------------------------
-# TODO: Make this dynamic
-df_input <- getOption("telescope.default_dataframe", default = FALSE)
-
 c_figure_type <- config_figure_type()
 
 # Server ------------------------------------------------------------------
 server <- shinyServer(function(input, output, session) {
   ## Input handling ----
-  s_fb_years <- reactive({
-    years <- paste0(str_sub(input$fb_years[[1]], 1, 4), "-", str_sub(input$fb_years[[2]], 1, 4))
-
-    return(years)
-  })
-  
   s_de_years <- reactive({
     years <- paste0(str_sub(input$de_years[[1]], 1, 4), "-", str_sub(input$de_years[[2]], 1, 4))
     
     return(years)
   })
 
-  s_fb_figure_no <- reactive({
-    figure_no <- as.character(input$fb_figure_no[[1]])
+  s_de_figure_no <- reactive({
+    figure_no <- as.character(input$de_figure_no[[1]])
 
     return(figure_no)
   })
 
   ## Debugging  ----
   ### Required and optional figure parameters ----
-  df_debug <- reactive({
-    req(input$fb_figure_type)
-    base_table <- filter(c_figure_type, figure_type == input$fb_figure_type)
+  df_de_debug <- reactive({
+    req(input$de_figure_type)
+    base_table <- filter(c_figure_type, figure_type == input$de_figure_type)
 
     output_table <-
       base_table %>%
@@ -46,123 +37,95 @@ server <- shinyServer(function(input, output, session) {
 
   })
 
-  output$t_fb_debug <- DT::renderDT(df_debug())
+  output$t_de_debug <- DT::renderDT(df_de_debug())
   
   ## Figure builder ----
-  ### Figure data ----
-  df_fb_data <- reactive({
-    df <- plotting_filter(
-      df_input,
-      reg_f = input$fb_regions,
-      mod_f = input$fb_models,
-      yrs_f = s_fb_years(),
-      sce_f = input$fb_scenarios,
-      var_f = input$fb_variable
-    )
-
-    return(df)
-  })
-
-  output$t_fb_data <- DT::renderDT(df_fb_data())
-
-  ### Figure builder plot ----
-  p_fb_figure <- reactive({
-    req(input$fb_figure_type)
-    req(input$fb_variable)
-    plot <- plotting(df = df_input,
-                     figtype = input$fb_figure_type,
-                     fb_title_name = input$fb_title_name,
-                     fb_figure_no = s_fb_figure_no(),
-                     fb_x = input$fb_x,
-                     fb_y = input$fb_y,
-                     fb_color = input$fb_color,
-                     fb_regions = input$fb_regions,
-                     fb_models = input$fb_models,
-                     fb_years = s_fb_years(),
-                     fb_scenarios = input$fb_scenarios,
-                     fb_variable = input$fb_variable,
-                     fb_facet1 = input$fb_facet1,
-                     fb_facet2 = input$fb_facet2)
-
-    return(plot)
-  })
-
-  output$p_fb_figure <- renderPlot({
-    p_fb_figure()
-  }, res = 130)
-
   ### Figure builder rows ----
   df_rows <- reactive({
-    if (is.null(input$fb_models)) {
-      fb_models <- as.list(unique(df_fb_data()$model))
+    if (is.null(input$de_models)) {
+      de_models <- as.list(unique(df_de_data()$model))
     } else {
-      fb_models <- input$fb_models
+      de_models <- input$de_models
     }
 
-    if (is.null(input$fb_scenarios)) {
-      fb_scenarios <- as.list(unique(df_fb_data()$scenario))
+    if (is.null(input$de_scenarios)) {
+      de_scenarios <- as.list(unique(df_de_data()$scenario))
     } else {
-      fb_scenarios <- input$fb_scenarios
+      de_scenarios <- input$de_scenarios
     }
 
-    if (is.null(input$fb_regions)) {
-      fb_regions <- as.list(unique(df_fb_data()$region))
+    if (is.null(input$de_regions)) {
+      de_regions <- as.list(unique(df_de_data()$region))
     } else {
-      fb_regions <- input$fb_regions
+      de_regions <- input$de_regions
+    }
+    
+    if ("Color by model" %in% input$de_grouping) {
+      de_color <- "model"
+    } else if ("Color by scenario" %in% input$de_grouping) {
+      de_color <- "scenario"
+    } else if ("Color by region" %in% input$de_grouping) {
+      de_color <- "region"
+    } else if ("Color by variable" %in% input$de_grouping) {
+      de_color <- "variable"
+    } else {
+      de_color <- "variable"
     }
 
-    df_r <- var_to_figdf(figtype = input$fb_figure_type,
-                         fb_title_name = input$fb_title_name,
-                         fb_figure_no = s_fb_figure_no(),
-                         fb_x = input$fb_x,
-                         fb_y = input$fb_y,
-                         fb_color = input$fb_color,
-                         fb_regions = fb_regions,
-                         fb_models = fb_models,
-                         fb_years = s_fb_years(),
-                         fb_scenarios = fb_scenarios,
-                         fb_variable = input$fb_variable,
-                         fb_facet1 = input$fb_facet1,
-                         fb_facet2 = input$fb_facet2)
+    df_r <- var_to_figdf(dataset = input$de_dataset,
+                         figtype = input$de_figure_type,
+                         fb_title_name = input$de_title_name,
+                         fb_figure_no = s_de_figure_no(),
+                         fb_x = input$de_x,
+                         fb_y = input$de_y,
+                         fb_color = de_color,
+                         fb_regions = de_regions,
+                         fb_models = de_models,
+                         fb_years = s_de_years(),
+                         fb_scenarios = de_scenarios,
+                         fb_variable = input$de_variable,
+                         fb_facet1 = input$de_facet1,
+                         fb_facet2 = input$de_facet2,
+                         fb_options = paste0(input$de_options, collapse = ", "))
 
     file <- system.file("output", "intermediate", package = "telescope")
-    saveRDS(df_r, file = paste0(file, "/", "fb_figure_data.rds"))
+    saveRDS(df_r, file = paste0(file, "/", "de_figure_data.rds"))
 
     return(df_r)
   })
 
-  output$t_fb_rows <- DT::renderDT(df_rows())
+  output$t_de_rows <- DT::renderDT(df_rows())
 
   ### Figure name ----
-  s_fb_figure_filename <- reactive({
-    req(input$fb_figure_no)
+  s_de_figure_filename <- reactive({
+    req(input$de_figure_no)
 
-    filename <- paste0("figure_", s_fb_figure_no(), ".csv")
+    filename <- paste0("figure_", s_de_figure_no(), ".csv")
     
     return(filename)
   })
 
   observe({
     updateTextInput(
-      inputId = "fb_title_name",
-      value = s_fb_figure_no()
+      inputId = "de_title_name",
+      value = s_de_figure_no()
     )
   })
 
   ### Download figure file ----
-  output$fb_figure_download <- downloadHandler(
-    filename = s_fb_figure_filename(),
+  output$de_figure_download <- downloadHandler(
+    filename = s_de_figure_filename(),
     content = function(file) {write.csv(df_rows(), file)}
     )
   
   ### Save figure file ----
-  observeEvent(input$fb_figure_save, {
+  observeEvent(input$de_figure_save, {
     file <- system.file("output", "figure", s_main_analysis(), package = "telescope")
     # TODO: Check for overwrite
-    write.csv(df_rows(), paste0(file, "/", s_fb_figure_filename()), row.names = FALSE)
+    write.csv(df_rows(), paste0(file, "/", s_de_figure_filename()), row.names = FALSE)
     updateNumericInput(
-      inputId = "fb_figure_no",
-      value = input$fb_figure_no + 1
+      inputId = "de_figure_no",
+      value = input$de_figure_no + 1
     )
   })
   
@@ -282,22 +245,12 @@ server <- shinyServer(function(input, output, session) {
       mod_f = input$de_models,
       yrs_f = s_de_years(),
       sce_f = input$de_scenarios,
-      var_f = input$de_variable
+      var_f = input$de_variable,
+      y_col = input$de_y,
+      options_list = input$de_options
     )
     
-    if ("Aggregate variables" %in% input$de_options) {
-      de_df <- 
-        df %>% 
-        dplyr::filter(variable %in% input$de_variable) %>% 
-        group_by(across(c(-variable, -value))) %>% 
-        summarize(value = sum(value, na.rm = TRUE), .groups = "drop") %>% 
-        ungroup() %>% 
-        mutate(variable = "Aggregated")
-    } else {
-      de_df <- df
-    }
-    
-    return(de_df)
+    return(df)
   })
   
   output$t_de_filtered_data <- DT::renderDT(df_de_data())
@@ -307,30 +260,30 @@ server <- shinyServer(function(input, output, session) {
     req(input$de_dataset)
     req(input$de_variable)
     
-    if ("Group by model" %in% input$de_grouping) {
+    if ("Color by model" %in% input$de_grouping) {
       de_color <- "model"
-    } else if ("Group by scenario" %in% input$de_grouping) {
+    } else if ("Color by scenario" %in% input$de_grouping) {
       de_color <- "scenario"
-    } else if ("Group by region" %in% input$de_grouping) {
+    } else if ("Color by region" %in% input$de_grouping) {
       de_color <- "region"
-    } else if ("Group by variable" %in% input$de_grouping) {
+    } else if ("Color by variable" %in% input$de_grouping) {
       de_color <- "variable"
     } else {
       de_color <- "variable"
     }
     
     if ("Aggregate variables" %in% input$de_options) {
-      de_variable <- "Aggregated"
+      de_variable <- c("Aggregated")
     } else {
       de_variable <- input$de_variable
     }
     
     plot <- plotting(df = df_de_data(),
-                     figtype = "timeseries",
+                     figtype = input$de_figure_type,
                      fb_title_name = "",
                      fb_figure_no = "",
-                     fb_x = "year",
-                     fb_y = "value",
+                     fb_x = input$de_x,
+                     fb_y = input$de_y,
                      fb_color = de_color,
                      fb_regions = input$de_regions,
                      fb_models = input$de_models,
@@ -338,11 +291,8 @@ server <- shinyServer(function(input, output, session) {
                      fb_scenarios = input$de_scenarios,
                      fb_variable = de_variable,
                      fb_facet1 = input$de_facet1,
-                     fb_facet2 = input$de_facet2)
-    
-    if ("Start y axis at 0" %in% input$de_options) {
-      plot <- plot + expand_limits(y = 0)
-    }
+                     fb_facet2 = input$de_facet2,
+                     fb_options = paste0(input$de_options, collapse = ", "))
     
     return(plot)
   })
@@ -350,5 +300,34 @@ server <- shinyServer(function(input, output, session) {
   output$p_de_figure <- renderPlot({
     p_de_figure()
   }, res = 130)
+  
+  ## MACC ----
+  ### UI update ----
+  observeEvent({input$de_figure_type}, {
+    if (input$de_figure_type == "MACC") {
+      #### Models ----
+      updateSelectInput(
+        inputId = "de_models",
+        label = "GHG"
+      )
+      
+      #### Scenarios ----
+      updateSelectInput(
+        inputId = "de_scenarios",
+        label = "Year"
+      )
+      
+      #### Axes ----
+      updateSelectInput(
+        inputId = "de_x",
+        choices = c("Q")
+      )
+      
+      updateSelectInput(
+        inputId = "de_y",
+        choices = c("p")
+      )
+    }
+  })
   
 })

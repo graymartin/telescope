@@ -1,4 +1,4 @@
-"figtype","title_name","figure_no","x","y","color","regions","models","years","scenarios","variable","facet1","facet2"
-"timeseries","1","1","year","value","model","United States","AEO2020","2000-2050","No IRA","Capacity|Electricity","",""
-"timeseries","1","1","year","value","model","United States","AEO2021","2000-2050","No IRA","Capacity|Electricity","",""
-"timeseries","1","1","year","value","model","United States","AEO2022","2000-2050","No IRA","Capacity|Electricity","",""
+"dataset","figtype","title_name","figure_no","x","y","color","regions","models","years","scenarios","variable","facet1","facet2"
+"example_datasets/leep_ex.csv","timeseries","1","1","year","value","model","United States","AEO2020","2000-2050","No IRA","Capacity|Electricity","",""
+"example_datasets/leep_ex.csv","timeseries","1","1","year","value","model","United States","AEO2021","2000-2050","No IRA","Capacity|Electricity","",""
+"example_datasets/leep_ex.csv","timeseries","1","1","year","value","model","United States","AEO2022","2000-2050","No IRA","Capacity|Electricity","",""

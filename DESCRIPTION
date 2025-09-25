@@ -22,4 +22,5 @@ Imports:
   geomtextpath,
   magrittr,
   DT,
-  purrr
+  purrr,
+  cowplot
