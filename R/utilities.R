@@ -196,7 +196,7 @@ analysis_to_figdf <- function(analysis = "default") {
 }
 
 # Input data manipulation -------------------------------------------------
-# Read MACC data aggregated to USREP regions
+# Read MACC data aggregated to USREP regions and USREP sectors
 read_agg_macc <- function(filename = "sub_data_v2.csv") {
   file <- system.file("data-raw", "MACC", filename, package = "telescope")
   data <- read_csv(file)

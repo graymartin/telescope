@@ -78,7 +78,11 @@ plotting <- function(df,
   }
 
   # Style plot
-  plot <- plotting_style(plot, x_lab = "", y_lab = "")
+  if (figtype == "timeseries") {
+    plot <- plotting_style(plot, x_lab = "", y_lab = "")
+  } else if (figtype == "MACC") {
+    plot <- plotting_style(plot, x_lab = "Mitigation (million tCO2e)", y_lab = "Price ($/tCO2e)")
+  }
   
   if ("Start y axis at 0" %in% options) {
     plot <- plot + expand_limits(y = 0)
@@ -86,7 +90,8 @@ plotting <- function(df,
   
   if (figtype == "MACC") {
     bar <- plotting_macc_bar(df)
-    plot <- cowplot::plot_grid(plotlist = c(plot, bar), nrow = 2, rel_heights = c(15, 1), align = "v")
+    plot <- plot + theme(legend.position = "none")
+    plot <- cowplot::plot_grid(plotlist = c(plot, bar), nrow = 2, rel_heights = c(15, 1), align = "v", axis = "tb")
   }
 
   return(plot)
@@ -100,11 +105,27 @@ plotting <- function(df,
   }
 }
 
+`%cancel%` <- function(e1, e2) {
+  if (is.null(e2)) {
+    return(FALSE)
+  } else {
+    return (e1 %in% e2)
+  }
+}
+
 plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f, y_col, options_list) {
-  df <-
-    df %>%
-    dplyr::filter((region %annull% reg_f) & (model %annull% mod_f) & (scenario %annull% sce_f) & (variable %annull% var_f)) %>%
-    dplyr::filter((year >= as.numeric(str_sub(yrs_f, 1, 4))) & (year <= as.numeric(str_sub(yrs_f, 6, 9))))
+  
+  if (nrow(df) > 5e5) {
+    df <-
+      df %>%
+      dplyr::filter((region %cancel% reg_f) & (model %cancel% mod_f) & (scenario %cancel% sce_f) & (variable %cancel% var_f)) %>%
+      dplyr::filter((year >= as.numeric(str_sub(yrs_f, 1, 4))) & (year <= as.numeric(str_sub(yrs_f, 6, 9))))
+  } else {
+    df <-
+      df %>%
+      dplyr::filter((region %annull% reg_f) & (model %annull% mod_f) & (scenario %annull% sce_f) & (variable %cancel% var_f)) %>%
+      dplyr::filter((year >= as.numeric(str_sub(yrs_f, 1, 4))) & (year <= as.numeric(str_sub(yrs_f, 6, 9))))
+  }
 
   if ("Aggregate variables" %in% options_list) {
     df <- 
@@ -142,8 +163,19 @@ plotting_line <- function(plot, df, label_lines = NULL) {
 }
 
 plotting_macc <- function(plot, df) {
+  p_min <- min(df$p, na.rm = TRUE)
+  p_max <- max(df$p, na.rm = TRUE)
+  baseline <- unique(df$baseline)[[1]]
+  tech_feasi <- max(df$Q, na.rm = TRUE)
+  
   line <- plot +
-    geom_line(data = df, size = 0.8, lineend = "round")
+    geom_line(data = df, size = 0.8, lineend = "round") +
+    xlim(0, baseline) +
+    ylim(p_min - 1000, p_max) +
+    geom_vline(xintercept = baseline, linetype = "dashed", color = "#00ba38") +
+    geom_label(aes(x = baseline, y = 0, label = scales::number(baseline, accuracy = 0.1)), fill = "#00ba38", colour = "white", size = 2.9, fontface="bold") +
+    geom_vline(xintercept = tech_feasi, linetype = "dashed", color = "#619cff") +
+    geom_label(aes(x = tech_feasi, y = 0, label = scales::number(tech_feasi, accuracy = 0.1)), fill = "#619cff", colour = "white", size = 2.9, fontface="bold")
   
   return(line)
 }
@@ -155,6 +187,7 @@ plotting_macc_bar <- function(df) {
   baseline <- unique(df$baseline)[[1]]
   tech_feasi <- max(df$Q, na.rm = TRUE)
   abt_le_zero <- max(df[df$p <= 0, ]$Q, na.rm = TRUE)
+  left_nudge <- -0.03*baseline
   
   b_f <- 1.0
   t_f <- tech_feasi/baseline
@@ -162,17 +195,14 @@ plotting_macc_bar <- function(df) {
   
   bar_data <- data.frame(
     name = c("b", "t", "a"),
-    length = c(b_f, t_f, a_f)
+    label = c(b_f - (t_f + a_f), t_f - a_f, a_f),
+    length = c(baseline, tech_feasi, abt_le_zero)
   )
   
   bar <- ggplot(data = bar_data) +
     geom_col(aes(x = length, y = "", fill = name), position = "identity") +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank()) +
+    guides(fill = "none") +
+    geom_label(aes(x = length, y = "", fill = name, label = scales::percent(label)), position = position_nudge(x = left_nudge), colour = "white", size = 2.9, fontface="bold") +
     guides(fill = "none") +
     theme_void()
   

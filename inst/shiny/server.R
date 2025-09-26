@@ -236,11 +236,32 @@ server <- shinyServer(function(input, output, session) {
   })
   
   ### Filtered data table ----
-  df_de_data <- reactive({
-    req(input$de_dataset)
+  df_de_data_bouncy <- reactive({
+    validate(
+      need(input$de_dataset, "Please select at least one dataset."),
+      need(input$de_variable, "Please select at least one variable.")
+    )
+    
+    full_data <- df_de_datasets()
+    
+    if (nrow(full_data) > 5e5) {
+      if (input$de_figure_type == "MACC") {
+        validate(
+          need(input$de_regions, "Please select at least one region."),
+          need(input$de_models, "Please select at least one GHG."),
+          need(input$de_scenarios, "Please select at least one year.")
+        )
+      } else if (input$de_figure_type == "timeseries") {
+        validate(
+          need(input$de_regions, "Please select at least one region."),
+          need(input$de_models, "Please select at least one model."),
+          need(input$de_scenarios, "Please select at least one scenario.")
+        )
+      }
+    }
     
     df <- plotting_filter(
-      df_de_datasets(),
+      full_data,
       reg_f = input$de_regions,
       mod_f = input$de_models,
       yrs_f = s_de_years(),
@@ -253,10 +274,12 @@ server <- shinyServer(function(input, output, session) {
     return(df)
   })
   
+  df_de_data <- df_de_data_bouncy %>% throttle(100)
+  
   output$t_de_filtered_data <- DT::renderDT(df_de_data())
   
   ### Data plot ----
-  p_de_figure <- reactive({
+  p_de_figure_bouncy <- reactive({
     req(input$de_dataset)
     req(input$de_variable)
     
@@ -296,6 +319,8 @@ server <- shinyServer(function(input, output, session) {
     
     return(plot)
   })
+  
+  p_de_figure <- p_de_figure_bouncy %>% debounce(100)
   
   output$p_de_figure <- renderPlot({
     p_de_figure()
