@@ -1,7 +1,7 @@
 
 # Setup -------------------------------------------------------------------
 ## Options ----
-options(telescope.default_dataframe = telescope::leep)
+options(telescope.reprocess_data = FALSE)
 options(readr.show_col_types = FALSE)
 
 # Functions ---------------------------------------------------------------

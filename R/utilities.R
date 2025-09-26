@@ -194,23 +194,3 @@ analysis_to_figdf <- function(analysis = "default") {
   
   return(figdf)
 }
-
-# Input data manipulation -------------------------------------------------
-# Read MACC data aggregated to USREP regions and USREP sectors
-read_agg_macc <- function(filename = "sub_data_v2.csv") {
-  file <- system.file("data-raw", "MACC", filename, package = "telescope")
-  data <- read_csv(file)
-  
-  data <-
-    data %>% 
-    mutate(model = ghg) %>% 
-    mutate(scenario = as.character(year)) %>% 
-    mutate(unit = ghg) %>% 
-    mutate(year = year) %>% 
-    mutate(variable = paste0(usrep_sector)) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("usrep_sector", "ghg")))
-  
-  return(data)
-}
-

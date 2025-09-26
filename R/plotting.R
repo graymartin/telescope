@@ -68,6 +68,18 @@ plotting <- function(df,
   } else if (figtype == "MACC") {
     plot <- plotting_macc(plot, df)
   }
+  
+  if ("Show plot details" %in% options) {
+    details_list <- list(
+      "Regions" = paste(fb_regions, collapse = ", "),
+      "Models" = paste(fb_models, collapse = ", "),
+      "Years" = paste(fb_years, collapse = ", "),
+      "Scenarios" = paste(fb_scenarios, collapse = ", "),
+      "Variables" = paste(fb_variable, collapse = ", ")
+    )
+    
+    plot <- plotting_details(plot, details_list)
+  }
 
   if (f_n > 0) {
     if ("Fix vertical facet scale" %in% options) {
@@ -219,6 +231,15 @@ plotting_facet <- function(plot, f1, f2, scale) {
   }
 
   return(facet)
+}
+
+plotting_details <- function(plot, details_list) {
+  text_prep <- paste0(names(details_list), ": ", unlist(details_list), collapse = "\n")
+  
+  details <- plot +
+    annotate("text", x = -Inf, y = Inf, label = text_prep, hjust = 0, vjust = 1.1)
+  
+  return(details)
 }
 
 plotting_style <- function(plot, x_lab = "", y_lab = "", ...) {

@@ -355,4 +355,38 @@ server <- shinyServer(function(input, output, session) {
     }
   })
   
+  ## Figure set ----
+  ### Figure set name ----
+  s_fs_set_filename <- reactive({
+    filename <- paste0("set_", s_main_analysis(), ".csv")
+    
+    return(filename)
+  })
+  
+  observe({
+    updateTextInput(
+      inputId = "fs_set_filename",
+      value = s_fs_set_filename()
+    )
+  })
+  
+  ### Save figure file ----
+  observeEvent(input$fs_set_save, {
+    file <- system.file("output", "mapping", package = "telescope")
+    file_path <- paste0(file, "/", s_fs_set_filename())
+    if (input$fs_overwrite) {
+      write.csv(df_fs_data(), file_path, row.names = FALSE)
+    } else if (file.exists(file_path)) {
+      showModal( 
+        modalDialog( 
+          title = "Analysis set already exists", 
+          easy_close = TRUE, 
+          "To proceed, either change the output filename or allow overwriting." 
+        ) 
+      )
+    } else {
+      write.csv(df_fs_data(), file_path, row.names = FALSE)
+    }
+  })
+  
 })

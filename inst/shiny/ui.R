@@ -2,8 +2,12 @@
 # UI ----------------------------------------------------------------------
 ## Set viewer ----
 fs_sidebar_options <- list(
-  actionButton("navbar_analysis_select", "Select analysis"),
-  textOutput("s_fs_data")
+  actionButton("navbar_analysis_select", "Select analysis set"),
+  actionButton("fs_set_save", "Save analysis set"),
+  layout_columns(
+    textInput("fs_set_filename", "Filename"),
+    checkboxInput("fs_overwrite", "Overwrite analysis set", TRUE)
+  )
 )
 fs_sidebar <- sidebar(id = "fs_sidebar", fs_sidebar_options, width = "20%")
 fs_figureset <- nav_panel("Saved figures", DT::DTOutput("t_fs_data"))
@@ -105,7 +109,8 @@ de_sidebar_options <- list(
       NULL,
       choices = list("Start y axis at 0" = "Start y axis at 0",
                      "Aggregate variables" = "Aggregate variables",
-                     "Fix vertical facet scale" = "Fix vertical facet scale"),
+                     "Fix vertical facet scale" = "Fix vertical facet scale",
+                     "Show plot details" = "Show plot details"),
       selected = list("Start y axis at 0", "Aggregate variables")
     )
   ),
