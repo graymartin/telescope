@@ -155,7 +155,7 @@ read_state_macc <- function(filename = "MACC_STATE_04102025.csv") {
     data %>% 
     pivot_longer(all_of(c("q_ch4", "q_n2o", "q_fghg")), 
                  names_to = "ghg", 
-                 values_to = "q_ghg",
+                 values_to = "QGHG",
                  names_prefix = "q_") %>% 
     mutate(model = ghg) %>% 
     mutate(scenario = as.character(year)) %>% 
@@ -166,7 +166,7 @@ read_state_macc <- function(filename = "MACC_STATE_04102025.csv") {
                             tech_long,
                             sep = "|")) %>% 
     mutate(region = state) %>% 
-    mutate(q = q_total) %>% 
+    mutate(Q = q_total) %>% 
     select(-any_of(c("q_total", "ghg", "sector", "source", "tech", "tech_long", "state")))
   
   return(data)
@@ -188,7 +188,7 @@ read_global_macc <- function(filename = "MACC_04102025.csv") {
     data %>% 
     pivot_longer(all_of(c("q_ch4", "q_n2o", "q_fghg")), 
                  names_to = "ghg", 
-                 values_to = "q_ghg",
+                 values_to = "QGHG",
                  names_prefix = "q_") %>% 
     mutate(model = ghg) %>% 
     mutate(scenario = as.character(year)) %>% 
@@ -198,16 +198,13 @@ read_global_macc <- function(filename = "MACC_04102025.csv") {
                             str_to_title(source), 
                             tech_long,
                             sep = "|")) %>% 
-    mutate(region = paste(na.omit(country), na.omit(state), sep = "|")) %>% 
-    mutate(q = q_total) %>% 
+    mutate(region = paste(country, state, sep = "|")) %>% 
+    mutate(Q = q_total) %>% 
     select(-any_of(c("q_total", "country", "country_code", "ghg", "sector", "source", "tech", "tech_long", "state")))
   
   return(data)
 }
 
 if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "MACC", package = "telescope")
-  data <- read_global_macc()
-  filename <- "global_macc.csv"
-  write_csv(data, paste0(file_out, "/", filename))
+logfr
 }

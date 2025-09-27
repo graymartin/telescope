@@ -345,7 +345,9 @@ server <- shinyServer(function(input, output, session) {
       #### Axes ----
       updateSelectInput(
         inputId = "de_x",
-        choices = c("Q")
+        choices = c("Q",
+                    "QGHG"),
+        selected = "Q"
       )
       
       updateSelectInput(
