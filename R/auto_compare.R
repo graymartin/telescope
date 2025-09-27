@@ -290,3 +290,17 @@ if (FALSE) {
   write_comparison(comp_em_2019_2024, "./output/RGER/comp_em_2019_2024.xlsx")
 }
 
+if (FALSE) {
+  dat_comp_list <- dataset_select_list()
+  
+  em_2024 <- 
+    read_dataset("./data/RGERQAQC/amended_composite.csv") %>% 
+    select(-any_of(c("unamended_value")))
+  
+  em_2019 <- 
+    read_dataset(dat_comp_list$`Emissions (2019)`) %>% 
+    select(-any_of(c("X")))
+  
+  comp_em_2019_2024 <- compare_df(em_2019, em_2024)
+  write_comparison(comp_em_2019_2024, "./output/RGER/comp_em_2019_amended_2024.xlsx")
+}

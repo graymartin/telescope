@@ -7,6 +7,8 @@
 #    http://shiny.rstudio.com/
 #
 
+library(tidyverse)
+
 #source("utilities.R", local = TRUE)
 cat_select_list <- category_select_list()
 cou_select_list <- country_select_list()
@@ -28,7 +30,7 @@ ui <- shinyUI(fluidPage(
                start = "2000-01-01",
                end = "2050-01-01",
                min = "1990-01-01",
-               max = "2050-01-01",
+               max = "2200-01-01",
                format = "yyyy"),
 
             checkboxGroupInput(

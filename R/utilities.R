@@ -79,8 +79,12 @@ dataset_select_list <- function() {
   crf_datasets <- list(
     "CRF (2024)" = "./data/CRF 2024/CRF_2024.csv"
   )
+  
+  qaqc_datasets <- list(
+    "Amended Emissions (2024)" = "./data/RGERQAQC/amended_composite.csv"
+  )
 
-  return(c(composite_datasets, unfccc_raw_datasets, unfccc_int_datasets, crf_datasets, input_datasets))
+  return(c(composite_datasets, unfccc_raw_datasets, unfccc_int_datasets, crf_datasets, qaqc_datasets, input_datasets))
 }
 
 style_plot <- function(baseplot, xaxis="", yaxis="", fill="", ...) {
