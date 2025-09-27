@@ -2,12 +2,13 @@
 # UI ----------------------------------------------------------------------
 ## Set viewer ----
 fs_sidebar_options <- list(
-  actionButton("navbar_analysis_select", "Select analysis set"),
-  actionButton("fs_set_save", "Save analysis set"),
   layout_columns(
-    textInput("fs_set_filename", "Filename"),
-    checkboxInput("fs_overwrite", "Overwrite analysis set", TRUE)
-  )
+    actionButton("navbar_analysis_select", "Select analysis directory"),
+    actionButton("fs_set_save", "Save combined analysis set")
+    ),
+  textInput("fs_set_filename", "Filename"),
+  checkboxInput("fs_overwrite", "Overwrite", TRUE),
+  actionButton("fs_images_save", "Save plot images")
 )
 fs_sidebar <- sidebar(id = "fs_sidebar", fs_sidebar_options, width = "20%")
 fs_figureset <- nav_panel("Saved figures", DT::DTOutput("t_fs_data"))
@@ -126,7 +127,7 @@ de_sidebar_options <- list(
       "Save Mapping"),
     downloadButton(
       "de_figure_download",
-      "Download Mapping")
+      "Download Image")
   )
 )
 
@@ -154,7 +155,7 @@ ui <- page_fluid(
     figureSet,
     nav_spacer(),
     nav_item(textOutput("navbar_analysis_text")),
-    nav_item(actionButton("navbar_analysis_select", "Select analysis")), 
+    nav_item(actionButton("navbar_analysis_select", "Select analysis directory")), 
     title = "Telescope",
     id = "page",
     fillable = TRUE

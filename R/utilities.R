@@ -1,3 +1,22 @@
+# Dataset access ----------------------------------------------------------
+dataset_access <- function(de_dataset) {
+  raw_data_list <- list()
+  for (s_dataset_selection in de_dataset) {
+    s_dataset_name <- names(config_dataset())[config_dataset() == s_dataset_selection]
+    
+    dir <- system.file("input", "dataset", package = "telescope")
+    s_filename <- paste0(dir, "/", s_dataset_selection)
+    
+    df_dataset <- read_csv(s_filename)
+    
+    raw_data_list[[s_dataset_selection]] <- df_dataset
+  }
+  
+  out_dataset <- bind_rows(raw_data_list, .id = "source_filename")
+  
+  return(out_dataset)
+}
+
 # Static config -----------------------------------------------------------
 load_file_config <- function(filename) {
   file <- system.file("config", filename, package = "telescope")
@@ -121,6 +140,7 @@ config_dataset <- function() {
 }
 
 # Figure mappings ---------------------------------------------------------
+# Convert single set of figure variables to DataFrame in figure mapping format
 var_to_figdf <- function(dataset,
                          figtype,
                          fb_title_name,
@@ -163,34 +183,66 @@ var_to_figdf <- function(dataset,
     unnest(variable) %>%
     as.data.frame()
   
-  df_fig <- apply(df_fig, 2, as.character)
+  df_fig <- lapply(df_fig, as.character)
   
   df_fig <- as.data.frame(df_fig)
 
   return(df_fig)
 }
 
-load_file_map <- function(analysis, filename) {
+# Convert DataFrame in figure mapping format to lists of variables
+figdf_to_var <- function(df_fig) {
+  split_list <- split(df_fig, list(df_fig$source))
+  
+  out_fig_vars <- list()
+  for (fig_source in names(split_list)) {
+    out_fig_vars[[fig_source]] <- lapply(split_list[[fig_source]], unique)
+  }
+  
+  return(out_fig_vars)
+}
+
+# Load figure DataFrame in figure mapping format from disk
+load_figure_file <- function(analysis, filename) {
   file <- system.file("output", "figure", analysis, filename, package = "telescope")
   return(read_csv(file, col_types = cols(.default = col_character()), na = character()))
 }
 
-analysis_to_figdf <- function(analysis = "default") {
-  dir <- system.file("output", "figure", analysis, package = "telescope")
+# Combine set of figure files into DataFrame in figure mapping format
+figures_to_figdf <- function(figure_dir = "default") {
+  dir <- system.file("output", "figure", figure_dir, package = "telescope")
   analysis_files <- list.files(dir, full.names = FALSE, recursive = FALSE)
   analysis_data <- list()
   for (filename in analysis_files) {
-    analysis_filemap <- load_file_map(analysis = analysis, filename = filename)
+    analysis_filemap <- load_figure_file(analysis = figure_dir, filename = filename)
     analysis_data[[filename]] <- analysis_filemap
   }
   
   figdf <- 
     bind_rows(analysis_data, .id = "source") %>% 
-    mutate(analysis = analysis) %>% 
+    mutate(analysis = figure_dir) %>% 
     relocate(analysis)
   
   file <- system.file("output", "intermediate", package = "telescope")
   saveRDS(figdf, file = paste0(file, "/", "fs_set_data.rds"))
   
   return(figdf)
+}
+
+# Load full figure set DataFrame in figure mapping format from disk
+load_mapping_file <- function(filename) {
+  file <- system.file("output", "mapping", filename, package = "telescope")
+  return(read_csv(file, col_types = cols(.default = col_character()), na = character()))
+}
+
+# Wrapper for load_mapping_file (for consistency)
+mapping_to_figdf <- function(filename = "set_default.csv") {
+  figdf <- load_mapping_file(filename)
+  return(figdf)
+}
+
+# Convert figure set to lists of variables
+mapping_to_var <- function(filename = "set_default.csv") {
+  figdf <- mapping_to_figdf(filename)
+  return(figdf_to_var(figdf))
 }

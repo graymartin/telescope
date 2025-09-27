@@ -72,7 +72,7 @@ server <- shinyServer(function(input, output, session) {
       de_color <- "variable"
     }
 
-    df_r <- var_to_figdf(dataset = input$de_dataset,
+    df_r <- var_to_figdf(dataset = paste0(input$de_dataset, collapse = ", "),
                          figtype = input$de_figure_type,
                          fb_title_name = input$de_title_name,
                          fb_figure_no = s_de_figure_no(),
@@ -104,6 +104,14 @@ server <- shinyServer(function(input, output, session) {
     
     return(filename)
   })
+  
+  s_de_figure_image_filename <- reactive({
+    req(input$de_figure_no)
+    
+    filename <- paste0("figure_", s_de_figure_no(), ".png")
+    
+    return(filename)
+  })
 
   observe({
     updateTextInput(
@@ -114,9 +122,11 @@ server <- shinyServer(function(input, output, session) {
 
   ### Download figure file ----
   output$de_figure_download <- downloadHandler(
-    filename = s_de_figure_filename(),
-    content = function(file) {write.csv(df_rows(), file)}
-    )
+    filename = s_de_figure_image_filename(),
+    content = function(file) {
+      device <- function(..., width, height) grDevices::png(..., width = 10, height = 7, res = 300, units = "in")
+      ggsave(p_de_figure(), filename = file, device = device)
+    })
   
   ### Save figure file ----
   observeEvent(input$de_figure_save, {
@@ -169,7 +179,7 @@ server <- shinyServer(function(input, output, session) {
                                return(list.files(dir, full.names = FALSE, recursive = FALSE))
                              }, 
                              valueFunc = function () {
-                               return(analysis_to_figdf(analysis = s_main_analysis()))
+                               return(figures_to_figdf(figure_dir = s_main_analysis()))
                              })
   
   output$t_fs_data <- DT::renderDT(
@@ -183,24 +193,17 @@ server <- shinyServer(function(input, output, session) {
   
   output$s_fs_data <- renderText(s_fs_data())
   
+  ### Save figures from analysis ----
+  observeEvent({input$fs_images_save}, {
+    batching(figdf_to_var(df_fs_data()), format_list = c("png"))
+  })
+  
   ## Data explorer ----
   ### Dataset combination ----
   df_de_datasets <- reactive({
     req(input$de_dataset)
     
-    raw_data_list <- list()
-    for (s_dataset_selection in input$de_dataset) {
-      s_dataset_name <- names(config_dataset())[config_dataset() == s_dataset_selection]
-      
-      dir <- system.file("input", "dataset", package = "telescope")
-      s_filename <- paste0(dir, "/", s_dataset_selection)
-      
-      df_dataset <- read_csv(s_filename)
-      
-      raw_data_list[[s_dataset_selection]] <- df_dataset
-    }
-    
-    out_dataset <- bind_rows(raw_data_list, .id = "source_filename")
+    out_dataset <- dataset_access(input$de_dataset)
     
     return(out_dataset)
   })

@@ -3,6 +3,7 @@
 
 
 # Functions ---------------------------------------------------------------
+## Core plotting functions ----
 plotting <- function(df,
                      figtype,
                      fb_title_name,
@@ -69,17 +70,17 @@ plotting <- function(df,
     plot <- plotting_macc(plot, df)
   }
   
+  details_list <- list(
+    "Regions" = paste(fb_regions, collapse = ", "),
+    "Models" = paste(fb_models, collapse = ", "),
+    "Years" = paste(fb_years, collapse = ", "),
+    "Scenarios" = paste(fb_scenarios, collapse = ", "),
+    "Variables" = paste(fb_variable, collapse = ", ")
+  )
+  
   if ("Show plot details" %in% options) {
-    details_list <- list(
-      "Regions" = paste(fb_regions, collapse = ", "),
-      "Models" = paste(fb_models, collapse = ", "),
-      "Years" = paste(fb_years, collapse = ", "),
-      "Scenarios" = paste(fb_scenarios, collapse = ", "),
-      "Variables" = paste(fb_variable, collapse = ", ")
-    )
-    
     plot <- plotting_details(plot, details_list)
-  }
+  } 
 
   if (f_n > 0) {
     if ("Fix vertical facet scale" %in% options) {
@@ -91,7 +92,10 @@ plotting <- function(df,
 
   # Style plot
   if (figtype == "timeseries") {
-    plot <- plotting_style(plot, x_lab = "", y_lab = "")
+    plot <- plotting_style(plot, 
+                           x_lab = str_to_title(x_col), 
+                           y_lab = str_to_title(y_col),
+                           title = title)
   } else if (figtype == "MACC") {
     plot <- plotting_style(plot, x_lab = "Mitigation (million tCO2e)", y_lab = "Price ($/tCO2e)")
   }
@@ -244,7 +248,7 @@ plotting_details <- function(plot, details_list) {
 
 plotting_style <- function(plot, x_lab = "", y_lab = "", ...) {
   styled <- plot +
-    labs(x = x_lab, y = y_lab) +
+    labs(x = x_lab, y = y_lab, ...) +
     guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
     theme(
       legend.position = "bottom",
@@ -264,11 +268,54 @@ plotting_style <- function(plot, x_lab = "", y_lab = "", ...) {
         hjust = 0.5
       ),
       plot.caption = element_text(
-        size = 10,
+        size = 8,
         colour = "#007BA7",
         face = "bold"
       )
     )
 
   return(styled)
+}
+
+## Batch plotting ----
+batching <- function(var_list, format_list = c("png")) {
+  plot_list <- list()
+  
+  for (s_name in names(var_list)) {
+    s <- var_list[[s_name]]
+    
+    # Store figure metadata not used in plotting()
+    analysis <- s$analysis
+    source <- s$source
+    # Store variables that have no prefix
+    df <- dataset_access(strsplit(s$dataset, split = ", ")[[1]])
+    figtype <- s$figtype
+    # Remove stored variables from list
+    s[c("analysis", "source", "dataset", "figtype")] <- NULL
+    
+    # Add prefix to remaining list elements
+    names(s) <- paste0("fb_", names(s))
+    # Add stored variables back to list
+    s$df <- df
+    s$figtype <- figtype
+    
+    plot <- do.call(plotting, s)
+    plot_list[[s_name]] <- plot
+    
+    if ("png" %in% format_list) {
+      png_dir <- system.file("output", "png", package = "telescope")
+      dir.create(paste0(png_dir, "/", analysis), showWarnings = FALSE)
+      png_analysis_dir <- system.file("output", "png", analysis, package = "telescope")
+      filename <- paste0(png_analysis_dir, "/", tools::file_path_sans_ext(source), ".png")
+      save_png(plot, filename)
+    }
+  }
+  
+  return(plot_list)
+}
+
+## Plot saving ----
+save_png <- function(plot, filename) {
+  device <- function(..., width, height) {grDevices::png(..., width = 10, height = 7, res = 300, units = "in")}
+  ggsave(plot, filename = filename, device = device)
 }

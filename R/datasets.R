@@ -1,3 +1,7 @@
+# Setup -------------------------------------------------------------------
+## Options ----
+options(telescope.reprocess_data = FALSE)
+
 # Input data manipulation -------------------------------------------------
 ## Sprint Tasks ----
 ### Variable Mapping ----
@@ -83,6 +87,36 @@ if (getOption("telescope.reprocess_data")) {
   file_out <- system.file("input", "dataset", "Task2", package = "telescope")
   data <- read_t2_report()
   filename <- "task2_report.csv"
+  write_csv(data, paste0(file_out, "/", filename))
+}
+
+read_aeo <- function(filename = "AEO_Comparison_Data.xlsx") {
+  file <- system.file("data-raw", "Task2", filename, package = "telescope")
+  sheet_names <- excel_sheets(file)
+  
+  sheet_data <- list()
+  for (sheet in sheet_names) {
+    data <- read_excel(file, sheet = sheet)
+    sheet_data[[sheet]] <- data
+  }
+  
+  df <- 
+    bind_rows(sheet_data, .id = "datasrc") %>% 
+    mutate(model = "AEO 2025") %>% 
+    mutate(scenario = ref) %>% 
+    mutate(unit = unit) %>% 
+    mutate(year = as.numeric(Year)) %>% 
+    mutate(variable = paste0(`energy type`, " (", sector, "|", `prod/con/trade`, ")")) %>% 
+    mutate(region = region) %>% 
+    select(-any_of(c("ref", "Year", "energy type", "sector", "prod/con/trade")))
+  
+  return(df)
+}
+
+if (getOption("telescope.reprocess_data")) {
+  file_out <- system.file("input", "dataset", "Task2", package = "telescope")
+  data <- read_aeo()
+  filename <- "aeo.csv"
   write_csv(data, paste0(file_out, "/", filename))
 }
 
@@ -206,5 +240,8 @@ read_global_macc <- function(filename = "MACC_04102025.csv") {
 }
 
 if (getOption("telescope.reprocess_data")) {
-logfr
+  file_out <- system.file("input", "dataset", "MACC", package = "telescope")
+  data <- read_global_macc()
+  filename <- "global_macc.csv"
+  write_csv(data, paste0(file_out, "/", filename))
 }
