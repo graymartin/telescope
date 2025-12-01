@@ -1,21 +1,22 @@
 exportPattern("^[[:alpha:]]+")
 
 ## Data manipulation ----
-import(readxl)
+importFrom(readxl, read_excel)
 import(stringr)
 import(dplyr)
 import(tidyverse)
 import(tidyr)
-import(magrittr)
-import(DT)
+importFrom(magrittr, `%>%`)
+importFrom(DT, DTOutput, renderDT, datatable)
 import(purrr)
-import(readr)
-import(cowplot)
+import(readr, write_csv)
+importFrom(cowplot, plot_grid)
 
 ## Visualization ----
 import(ggplot2)
-import(geomtextpath)
+importFrom(geomtextpath, geom_textline)
 
 ## Shiny ----
 import(shiny)
-import(bslib)
+importFrom(bslib, layout_columns, sidebar, nav_panel, navset_card_pill, 
+           page_fluid, page_navbar, nav_spacer, nav_item, card)
