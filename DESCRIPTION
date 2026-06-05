@@ -23,4 +23,8 @@ Imports:
   magrittr,
   DT,
   purrr,
-  cowplot
+  cowplot,
+  gamstransfer,
+  knitr,
+  rmarkdown,
+  here

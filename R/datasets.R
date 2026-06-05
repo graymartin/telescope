@@ -3,245 +3,126 @@
 options(telescope.reprocess_data = FALSE)
 
 # Input data manipulation -------------------------------------------------
-## Sprint Tasks ----
-### Variable Mapping ----
-read_mapping <- function(sheet, filename = "USREP_Variable_Map.xlsx") {
+## Tasks ----
+### Mapping ----
+read_mapping <- function(filename) {
   file <- system.file("data-raw", "VariableMapping", filename, package = "telescope")
-  data <- read_excel(file, sheet = sheet)
+  data <- readr::read_csv(file)
   
   return(data)
 }
 
-read_t1_mapping <- function(sheet = "Task1", filename = "USREP_Variable_Map.xlsx") {
-  return(read_mapping(sheet = sheet, filename = filename))
+read_fasom_model_mapping <- function(filename = "FASOM_mod.csv") {
+  return(read_mapping(filename = filename))
 }
 
-read_t2_mapping <- function(sheet = "Task2", filename = "USREP_Variable_Map.xlsx") {
-  return(read_mapping(sheet = sheet, filename = filename))
+read_fasom_column_mapping <- function(filename = "FASOM_col.csv") {
+  return(read_mapping(filename = filename))
 }
 
-read_t3_mapping <- function(sheet = "Task3", filename = "USREP_Variable_Map.xlsx") {
-  return(read_mapping(sheet = sheet, filename = filename))
-}
-
-### Task 1 ----
-read_t1_report <- function(filename = "report_Task1.xlsx") {
-  file <- system.file("data-raw", "Task1", filename, package = "telescope")
-  data_rpt <- 
-    read_excel(file, sheet = "rpt") %>% 
-    mutate(datasrc = "report_Task1.xlsx|rpt")
-  
-  data_rptr <- 
-    read_excel(file, sheet = "rptr") %>% 
-    mutate(datasrc = "report_Task1.xlsx|rptr")
-  
-  data <-
-    bind_rows(data_rpt, data_rptr) %>% 
-    left_join(read_t1_mapping()) %>% 
-    filter(!is.na(var_map_full)) %>% 
-    mutate(model = "Task 1 Report") %>% 
-    mutate(scenario = scen) %>% 
-    mutate(unit = unit) %>% 
-    mutate(year = as.numeric(year)) %>% 
-    mutate(variable = paste0(var_map_full, " (", item,"|", label1, "|", label2, "|", str_to_lower(unit), ")")) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("var_map_full", "label1", "label2", "scen", "item")))
-  
-  return(data)
-}
-
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "Task1", package = "telescope")
-  data <- read_t1_report()
-  filename <- "task1_report.csv"
-  write_csv(data, paste0(file_out, "/", filename))
-}
-
-### Task 2 ----
-read_t2_report <- function(filename = "report_Task2.xlsx") {
-  file <- system.file("data-raw", "Task2", filename, package = "telescope")
-  data_rpt <- 
-    read_excel(file, sheet = "rpt") %>% 
-    mutate(datasrc = "report_Task2.xlsx|rpt")
-  
-  data_rptr <- 
-    read_excel(file, sheet = "rptr") %>% 
-    mutate(datasrc = "report_Task2.xlsx|rptr")
-  
-  data <-
-    bind_rows(data_rpt, data_rptr) %>% 
-    left_join(read_t2_mapping()) %>% 
-    filter(!is.na(var_map_full)) %>% 
-    mutate(model = "Task 2 Report") %>% 
-    mutate(scenario = scen) %>% 
-    mutate(unit = unit) %>% 
-    mutate(year = as.numeric(year)) %>% 
-    mutate(variable = paste0(var_map_full, " (", item,"|", label1, "|", label2, "|", str_to_lower(unit), ")")) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("var_map_full", "label1", "label2", "scen", "item")))
-  
-  return(data)
-}
-
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "Task2", package = "telescope")
-  data <- read_t2_report()
-  filename <- "task2_report.csv"
-  write_csv(data, paste0(file_out, "/", filename))
-}
-
-read_aeo <- function(filename = "AEO_Comparison_Data.xlsx") {
-  file <- system.file("data-raw", "Task2", filename, package = "telescope")
-  sheet_names <- excel_sheets(file)
-  
-  sheet_data <- list()
-  for (sheet in sheet_names) {
-    data <- read_excel(file, sheet = sheet)
-    sheet_data[[sheet]] <- data
+### FASOM data----
+read_fasom_data <- function(filename, entry) {
+  # Resolve path: check inst/ first (installed package), then data-raw/ (development)
+  # Not sure if this is necessary
+  file <- system.file("data-raw", "FASOM", filename, package = "telescope")
+  if (!nzchar(file)) {
+    file <- file.path("data-raw", "FASOM", filename)
   }
-  
-  df <- 
-    bind_rows(sheet_data, .id = "datasrc") %>% 
-    mutate(model = "AEO 2025") %>% 
-    mutate(scenario = ref) %>% 
-    mutate(unit = unit) %>% 
-    mutate(year = as.numeric(Year)) %>% 
-    mutate(variable = paste0(`energy type`, " (", sector, "|", `prod/con/trade`, ")")) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("ref", "Year", "energy type", "sector", "prod/con/trade")))
-  
-  return(df)
+
+  gdx_container <- gamstransfer::Container$new(file)
+
+  data_gdx <-
+    gdx_container[entry]$records %>%
+    mutate(datasrc = paste0(filename, "|", entry)) %>%
+    mutate(filename = filename) %>%
+    mutate(entry = entry)
+
+  return(data_gdx)
 }
 
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "Task2", package = "telescope")
-  data <- read_aeo()
-  filename <- "aeo.csv"
-  write_csv(data, paste0(file_out, "/", filename))
+### FASOM preprocessing ----
+# Resolve the path to a GDX file, checking inst/ then data-raw/ (development).
+fasom_gdx_path <- function(filename) {
+  file <- system.file("data-raw", "FASOM", filename, package = "telescope")
+  if (!nzchar(file)) file <- file.path("data-raw", "FASOM", filename)
+  if (!file.exists(file)) stop("GDX file not found: ", filename)
+  file
 }
 
-### Task 3 ----
-read_t3_report <- function(filename = "report_Task3_new.xlsx") {
-  file <- system.file("data-raw", "Task3", filename, package = "telescope")
-  data_rpt <- 
-    read_excel(file, sheet = "rpt") %>% 
-    mutate(datasrc = "report_Task3_new.xlsx|rpt")
-  
-  data_rptr <- 
-    read_excel(file, sheet = "rptr") %>% 
-    mutate(datasrc = "report_Task3_new.xlsx|rptr")
-  
-  data <-
-    bind_rows(data_rpt, data_rptr) %>% 
-    left_join(read_t3_mapping()) %>% 
-    filter(!is.na(var_map_full)) %>% 
-    mutate(model = "Task 2 Report") %>% 
-    mutate(scenario = scen) %>% 
-    mutate(unit = unit) %>% 
-    mutate(year = as.numeric(year)) %>% 
-    mutate(variable = paste0(var_map_full, " (", item,"|", label1, "|", label2, "|", str_to_lower(unit), ")")) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("var_map_full", "label1", "label2", "scen", "item")))
-  
-  return(data)
+# Destination directory for processed FASOM CSVs.
+fasom_dataset_dir <- function() {
+  dir <- here::here("input", "dataset", "FASOM")
+  dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  dir
 }
 
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "Task3", package = "telescope")
-  data <- read_t3_report()
-  filename <- "task3_report.csv"
-  write_csv(data, paste0(file_out, "/", filename))
-}
+# Main function: process all FASOM GDX entries to standard telescope CSV format.
+# Saves one CSV per entry group to input/dataset/FASOM/.
+# Set force = TRUE to overwrite existing files.
+process_fasom_gdx <- function(force = FALSE) {
+  mod_map  <- read_fasom_model_mapping()   # FASOM_mod
+  col_map  <- read_fasom_column_mapping()  # FASOM_col
+  out_dir  <- fasom_dataset_dir()
 
-## MACC ----
-### Aggregated MACC ----
-# Read MACC data aggregated to USREP regions and USREP sectors
-read_agg_macc <- function(filename = "sub_data_v2.csv") {
-  file <- system.file("data-raw", "MACC", filename, package = "telescope")
-  data <- read_csv(file)
-  
-  data <-
-    data %>% 
-    mutate(model = ghg) %>% 
-    mutate(scenario = as.character(year)) %>% 
-    mutate(unit = ghg) %>% 
-    mutate(year = year) %>% 
-    mutate(variable = paste0(usrep_sector)) %>% 
-    mutate(region = region) %>% 
-    select(-any_of(c("usrep_sector", "ghg")))
-  
-  return(data)
-}
+  # Auto-discover GDX files
+  gdx_dir   <- system.file("data-raw", "FASOM", package = "telescope")
+  if (!nzchar(gdx_dir)) gdx_dir <- file.path("data-raw", "FASOM")
+  gdx_files <- list.files(gdx_dir, pattern = "\\.gdx$", full.names = FALSE)
 
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "MACC", package = "telescope")
-  data <- read_agg_macc()
-  filename <- "agg_macc.csv"
-  write_csv(data, paste0(file_out, "/", filename))
-}
+  # Warn about files not covered by FASOM_mod
+  mapped_files <- unique(mod_map$file)
+  unmapped     <- setdiff(gdx_files, mapped_files)
+  if (length(unmapped) > 0) {
+    warning("GDX files not in FASOM_mod (skipping): ", paste(unmapped, collapse = ", "))
+  }
 
-### Detailed state-level MACC ----
-read_state_macc <- function(filename = "MACC_STATE_04102025.csv") {
-  file <- system.file("data-raw", "MACC", filename, package = "telescope")
-  data <- read_csv(file)
-  
-  data <-
-    data %>% 
-    pivot_longer(all_of(c("q_ch4", "q_n2o", "q_fghg")), 
-                 names_to = "ghg", 
-                 values_to = "QGHG",
-                 names_prefix = "q_") %>% 
-    mutate(model = ghg) %>% 
-    mutate(scenario = as.character(year)) %>% 
-    mutate(unit = ghg) %>% 
-    mutate(year = year) %>% 
-    mutate(variable = paste(str_to_title(sector), 
-                            str_to_title(source), 
-                            tech_long,
-                            sep = "|")) %>% 
-    mutate(region = state) %>% 
-    mutate(Q = q_total) %>% 
-    select(-any_of(c("q_total", "ghg", "sector", "source", "tech", "tech_long", "state")))
-  
-  return(data)
-}
+  # Process only included entries
+  entries <- dplyr::filter(mod_map, include == TRUE)
 
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "MACC", package = "telescope")
-  data <- read_state_macc()
-  filename <- "state_macc.csv"
-  write_csv(data, paste0(file_out, "/", filename))
-}
+  message("Processing FASOM GDX files...")
 
-### Detailed global MACC ----
-read_global_macc <- function(filename = "MACC_04102025.csv") {
-  file <- system.file("data-raw", "MACC", filename, package = "telescope")
-  data <- read_csv(file)
-  
-  data <-
-    data %>% 
-    pivot_longer(all_of(c("q_ch4", "q_n2o", "q_fghg")), 
-                 names_to = "ghg", 
-                 values_to = "QGHG",
-                 names_prefix = "q_") %>% 
-    mutate(model = ghg) %>% 
-    mutate(scenario = as.character(year)) %>% 
-    mutate(unit = ghg) %>% 
-    mutate(year = year) %>% 
-    mutate(variable = paste(str_to_title(sector), 
-                            str_to_title(source), 
-                            tech_long,
-                            sep = "|")) %>% 
-    mutate(region = paste(country, state, sep = "|")) %>% 
-    mutate(Q = q_total) %>% 
-    select(-any_of(c("q_total", "country", "country_code", "ghg", "sector", "source", "tech", "tech_long", "state")))
-  
-  return(data)
-}
+  for (i in seq_len(nrow(entries))) {
+    row      <- entries[i, ]
+    dest     <- file.path(out_dir, paste0(row$out_name, ".csv"))
+    if (file.exists(dest) && !force) {
+      message("  Skipping (exists): ", row$out_name)
+      next
+    }
 
-if (getOption("telescope.reprocess_data")) {
-  file_out <- system.file("input", "dataset", "MACC", package = "telescope")
-  data <- read_global_macc()
-  filename <- "global_macc.csv"
-  write_csv(data, paste0(file_out, "/", filename))
+    message("  Processing: ", row$entry, " -> ", row$out_name)
+    raw      <- read_fasom_data(row$file, row$entry)
+    entry_col_map <- dplyr::filter(col_map, entry == row$entry)
+
+    # Identify unknown columns (not in mapping, and not auto-added by read_fasom_data)
+    known_meta_cols <- c("datasrc", "filename", "entry")
+    unknown_cols <- setdiff(names(raw), c(entry_col_map$raw_col, known_meta_cols))
+    if (length(unknown_cols) > 0) {
+      warning("Unknown columns in ", row$entry, " (dropping): ", paste(unknown_cols, collapse = ", "))
+    }
+
+    # Build rename vector from FASOM_col
+    rename_vec <- setNames(entry_col_map$raw_col, entry_col_map$std_col)
+    rename_vec <- rename_vec[rename_vec %in% names(raw)]  # only present columns
+    df <- dplyr::rename(raw, !!!rename_vec)
+
+    # Drop map_flag columns and unknown columns
+    df <- dplyr::select(df, -dplyr::any_of(c("map_flag", unknown_cols)))
+
+    # Add constants from FASOM_mod
+    df <- dplyr::mutate(df, model = row$model)
+    if (!is.na(row$unit)   && nzchar(row$unit))   df <- dplyr::mutate(df, unit   = row$unit)
+    if (!is.na(row$region) && nzchar(row$region)) df <- dplyr::mutate(df, region = row$region)
+    if (!is.na(row$const_variable) && nzchar(row$const_variable)) df <- dplyr::mutate(df, variable = row$const_variable)
+    if (isTRUE(row$cast_year_int)) df <- dplyr::mutate(df, year = as.integer(as.character(year)))
+
+    # Special handling for variable construction (ag_summary case)
+    if (row$entry == "n_acompareAgSummary" && "category" %in% names(df) && "subcategory" %in% names(df)) {
+      df <- dplyr::mutate(df, variable = paste(category, subcategory, sep = "|"))
+    }
+
+    readr::write_csv(df, dest)
+  }
+
+  message("FASOM GDX processing complete.")
+  invisible(out_dir)
 }

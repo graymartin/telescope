@@ -18,7 +18,11 @@ plotting <- function(df,
                      fb_variable,
                      fb_facet1 = "",
                      fb_facet2 = "",
-                     fb_options = "") {
+                     fb_options = "",
+                     fb_x_title = NULL,
+                     fb_y_title = NULL,
+                     fb_x_units = NULL,
+                     fb_y_units = NULL) {
   
   # Figure details (string)
   title <- fb_title_name
@@ -30,6 +34,12 @@ plotting <- function(df,
   y_col <- fb_y
   group_col <- fb_color
   color_col <- fb_color
+
+  # Axis labels (use custom title + optional units, else fall back to column name)
+  x_lab <- if (!is.null(fb_x_title)) fb_x_title else str_to_title(x_col)
+  y_lab <- if (!is.null(fb_y_title)) fb_y_title else str_to_title(y_col)
+  if (!is.null(fb_x_units)) x_lab <- paste0(x_lab, " (", fb_x_units, ")")
+  if (!is.null(fb_y_units)) y_lab <- paste0(y_lab, " (", fb_y_units, ")")
 
   # Filters (string lists)
   reg_f <- fb_regions
@@ -61,11 +71,19 @@ plotting <- function(df,
   }
 
   # Create plot base
-  plot <- plotting_base(df, x_col, y_col, group_col, color_col)
+  if (figtype %in% c("bar", "stacked_bar")) {
+    plot <- plotting_base(df, x_col, y_col, group_col, fill_col = fb_color)
+  } else {
+    plot <- plotting_base(df, x_col, y_col, group_col, color_col = fb_color)
+  }
 
   # Plot type
   if (figtype == "timeseries") {
     plot <- plotting_line(plot, df)
+  } else if (figtype == "bar") {
+    plot <- plotting_bar(plot, df)
+  } else if (figtype == "stacked_bar") {
+    plot <- plotting_stacked_bar(plot, df)
   } else if (figtype == "MACC") {
     plot <- plotting_macc(plot, df)
   }
@@ -92,9 +110,14 @@ plotting <- function(df,
 
   # Style plot
   if (figtype == "timeseries") {
-    plot <- plotting_style(plot, 
-                           x_lab = str_to_title(x_col), 
-                           y_lab = str_to_title(y_col),
+    plot <- plotting_style(plot,
+                           x_lab = x_lab,
+                           y_lab = y_lab,
+                           title = title)
+  } else if (figtype %in% c("bar", "stacked_bar")) {
+    plot <- plotting_style(plot,
+                           x_lab = x_lab,
+                           y_lab = y_lab,
                            title = title)
   } else if (figtype == "MACC") {
     plot <- plotting_style(plot, x_lab = "Mitigation (million tCO2e)", y_lab = "Price ($/tCO2e)")
@@ -104,8 +127,7 @@ plotting <- function(df,
     plot <- plot + expand_limits(y = 0)
   }
   
-  if (figtype == "MACC") {
-    bar <- plotting_macc_bar(df)
+  if (figtype == "MACC") {    bar <- plotting_macc_bar(df)
     plot <- plot + theme(legend.position = "none")
     plot <- cowplot::plot_grid(plotlist = c(plot, bar), nrow = 2, rel_heights = c(15, 1), align = "v", axis = "tb")
   }
@@ -139,7 +161,7 @@ plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f, y_col, option
   } else {
     df <-
       df %>%
-      dplyr::filter((region %annull% reg_f) & (model %annull% mod_f) & (scenario %annull% sce_f) & (variable %cancel% var_f)) %>%
+      dplyr::filter((region %annull% reg_f) & (model %annull% mod_f) & (scenario %annull% sce_f) & (variable %annull% var_f)) %>%
       dplyr::filter((year >= as.numeric(str_sub(yrs_f, 1, 4))) & (year <= as.numeric(str_sub(yrs_f, 6, 9))))
   }
 
@@ -159,16 +181,19 @@ plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f, y_col, option
   return(df)
 }
 
-plotting_base <- function(df, x_col, y_col, group_col, color_col) {
-  base <- ggplot(data = df, aes(x = !!sym(x_col), y = !!sym(y_col), group = !!sym(group_col), color = !!sym(color_col))) +
+plotting_base <- function(df, x_col, y_col, group_col, color_col = NULL, fill_col = NULL) {
+  base <- ggplot(data = df, aes(x = !!sym(x_col), y = !!sym(y_col), group = !!sym(group_col))) +
     theme_light(base_size = 10)
+
+  if (!is.null(color_col)) base <- base + aes(color = !!sym(color_col))
+  if (!is.null(fill_col))  base <- base + aes(fill  = !!sym(fill_col))
 
   return(base)
 }
 
 plotting_line <- function(plot, df, label_lines = NULL) {
   line <- plot +
-    geom_line(data = df, size = 0.8, lineend = "round")
+    geom_line(data = df, linewidth = 0.8, lineend = "round")
 
   if (!is.null(label_lines)) {
     line <- line +
@@ -178,50 +203,15 @@ plotting_line <- function(plot, df, label_lines = NULL) {
   return(line)
 }
 
-plotting_macc <- function(plot, df) {
-  p_min <- min(df$p, na.rm = TRUE)
-  p_max <- max(df$p, na.rm = TRUE)
-  baseline <- unique(df$baseline)[[1]]
-  tech_feasi <- max(df$Q, na.rm = TRUE)
-  
-  line <- plot +
-    geom_line(data = df, size = 0.8, lineend = "round") +
-    xlim(0, baseline) +
-    ylim(p_min - 1000, p_max) +
-    geom_vline(xintercept = baseline, linetype = "dashed", color = "#00ba38") +
-    geom_label(aes(x = baseline, y = 0, label = scales::number(baseline, accuracy = 0.1)), fill = "#00ba38", colour = "white", size = 2.9, fontface="bold") +
-    geom_vline(xintercept = tech_feasi, linetype = "dashed", color = "#619cff") +
-    geom_label(aes(x = tech_feasi, y = 0, label = scales::number(tech_feasi, accuracy = 0.1)), fill = "#619cff", colour = "white", size = 2.9, fontface="bold")
-  
-  return(line)
+plotting_bar <- function(plot, df) {
+  bar <- plot +
+    geom_col(data = df, position = "dodge", width = 0.7, color = "black", linewidth = 0.2)
+  return(bar)
 }
 
-plotting_macc_bar <- function(df) {
-  p_min <- min(df$p, na.rm = TRUE)
-  p_max <- max(df$p, na.rm = TRUE) 
-  
-  baseline <- unique(df$baseline)[[1]]
-  tech_feasi <- max(df$Q, na.rm = TRUE)
-  abt_le_zero <- max(df[df$p <= 0, ]$Q, na.rm = TRUE)
-  left_nudge <- -0.03*baseline
-  
-  b_f <- 1.0
-  t_f <- tech_feasi/baseline
-  a_f <- abt_le_zero/baseline
-  
-  bar_data <- data.frame(
-    name = c("b", "t", "a"),
-    label = c(b_f - (t_f + a_f), t_f - a_f, a_f),
-    length = c(baseline, tech_feasi, abt_le_zero)
-  )
-  
-  bar <- ggplot(data = bar_data) +
-    geom_col(aes(x = length, y = "", fill = name), position = "identity") +
-    guides(fill = "none") +
-    geom_label(aes(x = length, y = "", fill = name, label = scales::percent(label)), position = position_nudge(x = left_nudge), colour = "white", size = 2.9, fontface="bold") +
-    guides(fill = "none") +
-    theme_void()
-  
+plotting_stacked_bar <- function(plot, df) {
+  bar <- plot +
+    geom_col(data = df, position = "stack", color = "white", linewidth = 0.2)
   return(bar)
 }
 
@@ -249,7 +239,8 @@ plotting_details <- function(plot, details_list) {
 plotting_style <- function(plot, x_lab = "", y_lab = "", ...) {
   styled <- plot +
     labs(x = x_lab, y = y_lab, ...) +
-    guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
+    guides(color = guide_legend(nrow = 2, byrow = TRUE),
+           fill  = guide_legend(nrow = 2, byrow = TRUE)) +
     theme(
       legend.position = "bottom",
       legend.title = element_blank(),

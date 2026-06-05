@@ -9,7 +9,7 @@ import(tidyr)
 importFrom(magrittr, `%>%`)
 importFrom(DT, DTOutput, renderDT, datatable)
 import(purrr)
-import(readr, write_csv)
+importFrom(readr, write_csv, read_csv)
 importFrom(cowplot, plot_grid)
 
 ## Visualization ----

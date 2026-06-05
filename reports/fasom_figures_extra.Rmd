@@ -1,0 +1,486 @@
+---
+title: "FASOM Results — Complex Figures"
+output:
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    toc_depth: 3
+    code_folding: "hide"
+    number_sections: TRUE
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+devtools::load_all(".")
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 10, fig.height = 6, dpi = 150)
+```
+
+```{r setup-filters, include=FALSE}
+options(telescope.active_files = c("V43t6_Ag.gdx", "V43t6_For.gdx"))
+```
+
+```{r process-data, include=FALSE}
+process_fasom_gdx(force = FALSE)
+```
+
+```{r helpers}
+# GHG Pool mapping: variable -> pool label (for ghg_report and ghg_regional)
+.ghg_pool_dt <- read.csv(here::here("data-raw", "VariableMapping", "ghg_pool_map.csv"))
+GHG_POOL_MAP <- setNames(.ghg_pool_dt$ghg_pool, .ghg_pool_dt$variable)
+```
+
+```{r load-data, message=FALSE, warning=FALSE}
+library(data.table)
+library(dplyr)
+
+ds_dir <- system.file("input", "dataset", package = "telescope")
+
+# ---- Large files loaded with fread ----
+# ghg_regional.csv (>50 MB)
+ghg_regional <- fread(file.path(ds_dir, "FASOM/ghg_regional.csv")) |>
+  mutate(ghg_pool = GHG_POOL_MAP[variable])
+
+# for_forest_to_mill.csv (>50 MB)
+for_forest_to_mill <- fread(file.path(ds_dir, "FASOM/for_forest_to_mill.csv"))
+
+# ---- Standard-size files ----
+for_mill_to_port <- dataset_access("FASOM/for_mill_to_port.csv") |>
+  select(-source_filename)
+
+for_forest_to_port <- dataset_access("FASOM/for_forest_to_port.csv") |>
+  select(-source_filename)
+
+carbon_price <- dataset_access("FASOM/carbon_price.csv") |>
+  select(-source_filename)
+
+ghg_summary <- dataset_access("FASOM/ghg_summary.csv") |>
+  select(-source_filename)
+```
+
+# GHG Regional — gcompareREportreg {#ghg-regional}
+
+*Source: gcompareREportreg.twb — data: ghg_regional.csv + carbon_price.csv*
+
+> These 56 worksheets provide regional breakdowns of annual GHG flux by GHG Pool,
+> region, and scenario.  The `ghg_regional` dataset has >50 MB and is read with
+> `data.table::fread()`.
+
+```{r ghg-reg-setup}
+# Base subsets used by most gcompareREportreg worksheets
+ghg_reg_annual <- ghg_regional |>
+  filter(set == "annualflux") |>
+  filter(!is.na(ghg_pool))
+
+ghg_reg_diff <- ghg_regional |>
+  filter(set == "annualfluxdiffrombase") |>
+  filter(!is.na(ghg_pool))
+```
+
+## Forest Pools — Regional {#ghg-reg-forest}
+
+```{r ghg-reg-forest}
+# Tableau: gcompareREportreg.twb — Forest pool worksheets
+# Filter: GHH Pool=Afforestation,Forest Management,Forest Products,Forest Soils
+forest_pools <- c("Afforestation","Forest Management","Forest Products","Forest Soils")
+
+plotting(
+  df         = ghg_reg_annual |>
+    filter(ghg_pool %in% forest_pools) |>
+    mutate(value = value / 1000),
+  figtype    = "stacked_bar",
+  fb_title_name = "Forest GHG Flux — Regional",
+  fb_figure_no  = "20.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "ghg_pool",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Ag Pools — Regional {#ghg-reg-ag}
+
+```{r ghg-reg-ag}
+# Filter: GHH Pool=Ag CO2,Ag Soils,Crop Non-CO2,Livestock Non-CO2
+ag_pools <- c("Ag CO2","Ag Soils","Crop Non-CO2","Livestock Non-CO2")
+
+plotting(
+  df         = ghg_reg_annual |>
+    filter(ghg_pool %in% ag_pools) |>
+    mutate(value = value / 1000),
+  figtype    = "stacked_bar",
+  fb_title_name = "Agricultural GHG Flux — Regional",
+  fb_figure_no  = "20.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "ghg_pool",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## All Pools — Diff from Baseline {#ghg-reg-diff}
+
+```{r ghg-reg-diff}
+# Filter: GHG Measure=annualfluxdiffrombase, Scenario≠BASE
+plotting(
+  df         = ghg_reg_diff |>
+    mutate(value = value / 1000),
+  figtype    = "stacked_bar",
+  fb_title_name = "GHG Mitigation — Regional Difference from Baseline",
+  fb_figure_no  = "20.3",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "ghg_pool",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2065",
+  fb_scenarios = c("$20at3","$50at3"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Regional Timeseries — All Scenarios {#ghg-reg-ts}
+
+```{r ghg-reg-ts}
+# Aggregate all pools by region/year/scenario for total net flux
+ghg_reg_total <- ghg_reg_annual |>
+  group_by(year, region, scenario, model) |>
+  summarise(value = sum(value, na.rm = TRUE) / 1e6, .groups = "drop") |>
+  mutate(variable = "Net GHG Flux")
+
+plotting(
+  df         = ghg_reg_total,
+  figtype    = "timeseries",
+  fb_title_name = "Total Net GHG Flux — Regional",
+  fb_figure_no  = "20.4",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2065",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Remaining gcompareREportreg Worksheets {#ghg-reg-remaining}
+
+```{r ghg-reg-remaining}
+# FLAG: exploratory — 52 additional worksheets cover:
+#  - individual pool timeseries by region
+#  - scenario comparison views
+#  - multi-model comparisons
+#  - afforestation/deforestation breakouts
+# Representative loop: one stacked bar per region (Baseline)
+
+for (reg in c("CB","GP","LS","NE","PNWE","PNWW","PSW","RM","SC","SE","SW","National")) {
+  p <- plotting(
+    df         = ghg_reg_annual |>
+      filter(region == reg, !is.na(ghg_pool)) |>
+      mutate(value = value / 1000),
+    figtype    = "stacked_bar",
+    fb_title_name = paste("GHG Flux —", reg, "Region"),
+    fb_figure_no  = paste0("20.", which(c("CB","GP","LS","NE","PNWE","PNWW","PSW","RM","SC","SE","SW","National") == reg) + 4),
+    fb_x       = "year",
+    fb_y       = "value",
+    fb_color   = "ghg_pool",
+    fb_regions = NULL,
+    fb_models  = c("V43t6_Ag"),
+    fb_years   = "2020-2065",
+    fb_scenarios = c("BASE"),
+    fb_variable  = NULL
+  )
+  print(p)
+}
+```
+
+# GHG Regional — UMD Variant {#ghg-reg-umd}
+
+*Source: gcompareREportreg_UMD.twb (23 sheets) and gcompareREportreg_UMD_v2.twb (28 sheets)*
+*— data: ghg_regional.csv + carbon_price.csv*
+
+> Same data as gcompareREportreg.twb but filtered to UMD-relevant models
+> and scenarios.  Representative implementations below.
+
+## UMD Forest Flux {#ghg-reg-umd-forest}
+
+```{r ghg-reg-umd-forest}
+# FLAG: exploratory — 23 + 28 worksheets filtered on models not in current GDX
+plotting(
+  df         = ghg_reg_annual |>
+    filter(ghg_pool %in% c("Afforestation","Forest Management","Forest Products","Forest Soils")) |>
+    mutate(value = value / 1000),
+  figtype    = "stacked_bar",
+  fb_title_name = "UMD Forest GHG Flux (available models)",
+  fb_figure_no  = "21.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "ghg_pool",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## UMD Ag Flux {#ghg-reg-umd-ag}
+
+```{r ghg-reg-umd-ag}
+plotting(
+  df         = ghg_reg_annual |>
+    filter(ghg_pool %in% c("Ag CO2","Ag Soils","Crop Non-CO2","Livestock Non-CO2")) |>
+    mutate(value = value / 1000),
+  figtype    = "stacked_bar",
+  fb_title_name = "UMD Ag GHG Flux (available models)",
+  fb_figure_no  = "21.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "ghg_pool",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+# GHG Regional — Map Workbook (TODO) {#ghg-reg-map}
+
+*Source: gcompareREportreg_UMD_v2_Map.twb (20 sheets)*
+
+> **TODO**: 20 worksheets use a shapefile (`FASOM_11_Current_Measures_062823.shp`)
+> for choropleth mapping.  Implement once the shapefile is accessible via:
+> `sf::read_sf()` and `ggplot2::geom_sf()`.
+
+# Forest Flow — Forest to Mill {#for-forest-to-mill}
+
+*Source: FOR_Forest_To_Mill.twb — data: for_forest_to_mill.csv (>50 MB)*
+
+```{r for-mill-setup}
+# Log type groupings used in FOR_Forest_To_Mill
+# Actual values: SW_SawLogs, SW_PulpLogs, SW_LogRes, HW_SawLogs, HW_PulpLogs, HW_LogRes
+softwood_logs <- c("SW_SawLogs", "SW_PulpLogs", "SW_LogRes")
+hardwood_logs <- c("HW_SawLogs", "HW_PulpLogs", "HW_LogRes")
+```
+
+## Softwood to Mill — Regional {#for-mill-sw}
+
+```{r for-mill-sw}
+# Tableau: FOR_Forest_To_Mill.twb
+# Rows: Value, Cols: Year, Color: Scenario
+# Filter: log_type=softwood variants, Region≠Total
+plotting(
+  df         = for_forest_to_mill |>
+    filter(log_type %in% softwood_logs) |>
+    group_by(year, region, scenario, model) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    mutate(variable = "Softwood"),
+  figtype    = "timeseries",
+  fb_title_name = "Softwood Log Harvest to Mill — Regional",
+  fb_figure_no  = "22.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = c("Base","BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Hardwood to Mill — Regional {#for-mill-hw}
+
+```{r for-mill-hw}
+plotting(
+  df         = for_forest_to_mill |>
+    filter(log_type %in% hardwood_logs) |>
+    group_by(year, region, scenario, model) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    mutate(variable = "Hardwood"),
+  figtype    = "timeseries",
+  fb_title_name = "Hardwood Log Harvest to Mill — Regional",
+  fb_figure_no  = "22.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = c("Base","BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Total Log Flow to Mill {#for-mill-total}
+
+```{r for-mill-total}
+plotting(
+  df         = for_forest_to_mill |>
+    group_by(year, region, scenario, model) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    mutate(variable = "Total"),
+  figtype    = "timeseries",
+  fb_title_name = "Total Log Harvest to Mill",
+  fb_figure_no  = "22.3",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Log Flow by Forest Type {#for-mill-by-type}
+
+```{r for-mill-by-type}
+plotting(
+  df         = for_forest_to_mill |>
+    group_by(year, region, forest_type, scenario, model) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    rename(variable = forest_type),
+  figtype    = "stacked_bar",
+  fb_title_name = "Log Flow by Forest Type",
+  fb_figure_no  = "22.4",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = c("Base","BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+## Log Flow Multi-scenario {#for-mill-scenarios}
+
+```{r for-mill-scenarios}
+# FLAG: exploratory — 6 remaining FOR_Forest_To_Mill sheets
+for (sc_grp in list(
+  list(title = "Softwood Log Flow — High Carbon Price", fig = "22.5",
+       logs = softwood_logs, scens = c("$50at3","$100at3")),
+  list(title = "Hardwood Log Flow — High Carbon Price", fig = "22.6",
+       logs = hardwood_logs, scens = c("$50at3","$100at3"))
+)) {
+  p <- plotting(
+    df         = for_forest_to_mill |>
+      filter(log_type %in% sc_grp$logs) |>
+      group_by(year, region, scenario, model) |>
+      summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+      mutate(variable = "Total"),
+    figtype    = "timeseries",
+    fb_title_name = sc_grp$title,
+    fb_figure_no  = sc_grp$fig,
+    fb_x       = "year",
+    fb_y       = "value",
+    fb_color   = "scenario",
+    fb_regions = NULL,
+    fb_models  = c("V43t6_For"),
+    fb_years   = "2015-2080",
+    fb_scenarios = sc_grp$scens,
+    fb_variable  = NULL,
+    fb_facet1  = "region"
+  )
+  print(p)
+}
+```
+
+# Forest Flow — Forest to Port {#for-forest-to-port}
+
+*Source: For_forest_to_port.twb — data: for_forest_to_port.csv*
+
+## Sheet 1 {#for-port-sheet1}
+
+```{r for-port-sheet1}
+# Tableau: For_forest_to_port.twb / Sheet 1
+plotting(
+  df         = for_forest_to_port |>
+    group_by(year, region, scenario, model, variable) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop"),
+  figtype    = "timeseries",
+  fb_title_name = "Log Export — Forest to Port",
+  fb_figure_no  = "23.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "region"
+)
+```
+
+# Forest Flow — Mill to Port {#for-mill-to-port}
+
+*Source: For_mill_to_port.twb — data: for_mill_to_port.csv*
+
+## Sheet 1 — Mill to Port by Commodity {#for-mtp-sheet1}
+
+```{r for-mtp-sheet1}
+plotting(
+  df         = for_mill_to_port |>
+    group_by(year, region, commodity_from, scenario, model, variable) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    rename(commodity = commodity_from),
+  figtype    = "timeseries",
+  fb_title_name = "Manufactured Products Export — Mill to Port",
+  fb_figure_no  = "24.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = c("Base","BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "commodity"
+)
+```
+
+## Sheet 2 — Mill to Port Regional {#for-mtp-sheet2}
+
+```{r for-mtp-sheet2}
+plotting(
+  df         = for_mill_to_port |>
+    group_by(year, region, region_to, scenario, model) |>
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") |>
+    mutate(variable = paste(region, "→", region_to)),
+  figtype    = "timeseries",
+  fb_title_name = "Mill to Port — Origin–Destination",
+  fb_figure_no  = "24.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = c("Base","BASE"),
+  fb_variable  = NULL
+)
+```
