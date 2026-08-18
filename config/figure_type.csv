@@ -1,4 +1,6 @@
 ﻿figure_type,required,optional,inherits
-base,"figure_no, title_name, regions, models, years, scenarios, variable, color",,
+base,"figure_no, title_name, regions, models, years, scenarios, variable, color","x_title, y_title, x_units, y_units, subtitle, caption, facet_scales, facet_ncol, points, hline0, labels, linetype, palette, pct_change, pct_baseline, preprocessors, x_breaks",
 timeseries,"x, y","facet1, facet2",base
-MACC,"x, y","facet1, facet2",base
+bar,"x, y","facet1, facet2",base
+stacked_bar,"x, y","facet1, facet2",base
+

@@ -34,7 +34,6 @@ read_fasom_data <- function(filename, entry) {
   data_gdx <-
     gdx_container[entry]$records %>%
     mutate(datasrc = paste0(filename, "|", entry)) %>%
-    mutate(filename = filename) %>%
     mutate(entry = entry)
 
   return(data_gdx)
@@ -50,6 +49,10 @@ fasom_gdx_path <- function(filename) {
 }
 
 # Destination directory for processed FASOM CSVs.
+# CSVs are written to per-model subdirectories:
+#   input/dataset/FASOM/<gdx_basename>/<out_name>.csv
+# (e.g. input/dataset/FASOM/V43t6_Ag/carbon_price.csv). The parent
+# `input/dataset/FASOM/` is returned; per-model subdirs are created on demand.
 fasom_dataset_dir <- function() {
   dir <- here::here("input", "dataset", "FASOM")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
@@ -57,7 +60,7 @@ fasom_dataset_dir <- function() {
 }
 
 # Main function: process all FASOM GDX entries to standard telescope CSV format.
-# Saves one CSV per entry group to input/dataset/FASOM/.
+# Saves one CSV per entry group to input/dataset/FASOM/<gdx_basename>/.
 # Set force = TRUE to overwrite existing files.
 process_fasom_gdx <- function(force = FALSE) {
   mod_map  <- read_fasom_model_mapping()   # FASOM_mod
@@ -82,19 +85,29 @@ process_fasom_gdx <- function(force = FALSE) {
   message("Processing FASOM GDX files...")
 
   for (i in seq_len(nrow(entries))) {
-    row      <- entries[i, ]
-    dest     <- file.path(out_dir, paste0(row$out_name, ".csv"))
+    row        <- entries[i, ]
+    model_dir  <- tools::file_path_sans_ext(row$file)  # e.g. "V43t6_Ag"
+    dest_dir   <- file.path(out_dir, model_dir)
+    dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
+    dest       <- file.path(dest_dir, paste0(row$out_name, ".csv"))
     if (file.exists(dest) && !force) {
-      message("  Skipping (exists): ", row$out_name)
+      message("  Skipping (exists): ", model_dir, "/", row$out_name)
       next
     }
 
-    message("  Processing: ", row$entry, " -> ", row$out_name)
-    raw      <- read_fasom_data(row$file, row$entry)
-    entry_col_map <- dplyr::filter(col_map, entry == row$entry)
+    message("  Processing: ", row$entry, " -> ", model_dir, "/", row$out_name)
+    raw <- read_fasom_data(row$file, row$entry)
+
+    # Keep only wildcard (*) or model_dir-specific rows, preferring model_dir when both exist.
+    entry_col_map <- col_map %>%
+      dplyr::filter(entry == row$entry, model %in% c("*", model_dir)) %>%
+      dplyr::group_by(raw_col) %>%
+      dplyr::arrange(dplyr::desc(model == model_dir), .by_group = TRUE) %>%
+      dplyr::slice(1) %>%
+      dplyr::ungroup()
 
     # Identify unknown columns (not in mapping, and not auto-added by read_fasom_data)
-    known_meta_cols <- c("datasrc", "filename", "entry")
+    known_meta_cols <- c("datasrc", "entry")
     unknown_cols <- setdiff(names(raw), c(entry_col_map$raw_col, known_meta_cols))
     if (length(unknown_cols) > 0) {
       warning("Unknown columns in ", row$entry, " (dropping): ", paste(unknown_cols, collapse = ", "))
@@ -118,6 +131,17 @@ process_fasom_gdx <- function(force = FALSE) {
     # Special handling for variable construction (ag_summary case)
     if (row$entry == "n_acompareAgSummary" && "category" %in% names(df) && "subcategory" %in% names(df)) {
       df <- dplyr::mutate(df, variable = paste(category, subcategory, sep = "|"))
+    }
+
+    # Normalize scenario baseline label — some GDX outputs spell it "Base",
+    # others "BASE". Canonicalize to uppercase so downstream filters don't
+    # silently drop rows. gamstransfer returns categorical columns as
+    # factors; coerce to character first or `ifelse` will store integer
+    # codes on the "no" branch.
+    if ("scenario" %in% names(df)) {
+      df <- dplyr::mutate(df,
+        scenario = as.character(scenario),
+        scenario = ifelse(tolower(scenario) == "base", "BASE", scenario))
     }
 
     readr::write_csv(df, dest)

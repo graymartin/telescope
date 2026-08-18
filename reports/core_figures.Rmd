@@ -1,0 +1,675 @@
+---
+title: "FASOM Results"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+    toc_depth: 3
+    code_folding: "hide"
+    number_sections: TRUE
+---
+# Setup
+```{r setup, include=FALSE}
+devtools::load_all(".")
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 10, fig.height = 6, dpi = 150)
+```
+
+```{r setup-filters, include=FALSE}
+# Model names to filter report (bare GDX basenames, no `.gdx`).
+model_filter = c("V43t6_Ag", "V43t6_For")
+```
+
+```{r process-data, include=FALSE}
+# Process GDX files to standard CSV format (skips if files already exist).
+# Set force = TRUE to re-process after data updates.
+process_fasom_gdx(force = FALSE)
+```
+
+```{r helpers}
+# GHG Pool mapping: variable -> pool label (for ghg_report and ghg_regional)
+.ghg_pool_dt <- read.csv(here::here("data-raw", "VariableMapping", "FASOM_submap_ghg_pool.csv"))
+GHG_POOL_MAP <- setNames(.ghg_pool_dt$ghg_pool, .ghg_pool_dt$variable)
+
+# Commodity group lookup for ag_balance (acompareBalancep)
+.comm_dt <- read.csv(here::here("data-raw", "VariableMapping", "FASOM_submap_commodity_group.csv"))
+CROPS_COMMODITIES     <- .comm_dt$commodity[.comm_dt$group == "crop"]
+LIVESTOCK_COMMODITIES <- .comm_dt$commodity[.comm_dt$group == "livestock"]
+```
+
+## Data Access
+
+```{r load-data, message=FALSE, warning=FALSE}
+carbon_price  <- read_dataset("carbon_price.csv",  model_filter = model_filter)
+ghg_summary   <- read_dataset("ghg_summary.csv",   model_filter = model_filter)
+ghg_report    <- read_dataset("ghg_report.csv",    model_filter = model_filter) %>%
+  mutate(ghg_pool = GHG_POOL_MAP[variable])
+ag_strategies <- read_dataset("ag_strategies.csv", model_filter = model_filter)
+ag_summary    <- read_dataset("ag_summary.csv",    model_filter = model_filter)
+ag_balance    <- read_dataset("ag_balance.csv",    model_filter = model_filter)
+ag_proc_biod  <- read_dataset("ag_proc_biod.csv",  model_filter = model_filter)
+ag_proc_elec  <- read_dataset("ag_proc_elec.csv",  model_filter = model_filter)
+ag_proc_eth   <- read_dataset("ag_proc_eth.csv",   model_filter = model_filter)
+
+for_product_price  <- read_dataset("for_product_price.csv",  model_filter = model_filter)
+total_acres        <- read_dataset("total_acres.csv",        model_filter = model_filter)
+nat_log_harvest    <- read_dataset("nat_log_harvest.csv",    model_filter = model_filter)
+mfg_output         <- read_dataset("mfg_output.csv",         model_filter = model_filter)
+recycling_output   <- read_dataset("recycling_output.csv",   model_filter = model_filter)
+land_transfer      <- read_dataset("land_transfer.csv",      model_filter = model_filter)
+total_for_acres    <- read_dataset("total_for_acres.csv",    model_filter = model_filter)
+chk_eq_landbalance <- read_dataset("chk_eq_landbalance.csv", model_filter = model_filter)
+```
+
+# Carbon Prices {#carbon-prices}
+
+*Data: carbon_price.csv*
+## Carbon Price {#cp-sheet1-2}
+
+```{r cp-sheet1-2}
+plotting(
+  df         = carbon_price %>% mutate(value = value / (44 / 12)) %>% filter(scenario != "BASE") %>% mutate(scenstart = as.numeric(str_sub(scenario, start = 2, end = -4))),
+  figtype    = "timeseries",
+  fb_title_name = "Carbon Price (2020–2050)",
+  fb_figure_no  = "1.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2050",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "scenstart",
+  fb_y_units = "$/t CO2e",
+  fb_subtitle = "Non-baseline scenarios, faceted by starting price ($/t CO2)",
+  fb_caption  = paste0("Data: carbon_price.csv\nModels: ", paste0(model_filter, collapse = ", ")),
+  fb_points   = TRUE
+)
+```
+
+# National GHG Summary {#ghg-summary}
+
+```{r ghg-summary-base-data}
+ghg_sum_annual <- ghg_summary %>% 
+  dplyr::filter(set == "annualflux", gas == "carbondioxideeq", category == "AllTotal", scenario == "BASE")
+
+ghg_sum_level  <- ghg_summary %>% 
+  dplyr::filter(set == "level", gas == "carbondioxideeq", category == "AllTotal")
+```
+
+## Annual Flux {#ghg-sum-brflux}
+
+```{r ghg-sum-brflux}
+br_flux_df <- 
+  ghg_sum_annual %>%
+  mutate(value = value / 1000) %>%
+  filter(!(variable %in% c("TotalNetEmis"))) %>%
+  filter(!grepl("BioElec", variable)) %>%
+  filter(!grepl("Biodiesel", variable)) %>% 
+  filter(!grepl("Ethl", variable)) %>% 
+  mutate(highlevel = str_extract(variable, "[^_]+")) %>% 
+  filter(highlevel != "Dev")
+
+# TODO: Label quants within bars
+
+plotting(
+  df         = br_flux_df,
+  figtype    = "stacked_bar",
+  fb_title_name = "Baseline Annual Flux",
+  fb_figure_no  = "2.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "highlevel",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_y_title = "Average Annual Flux",
+  fb_y_units = "Tg CO2e/year",
+  fb_options = c("Aggregate variables"),
+  fb_subtitle = "V43t6_Ag baseline; GHG pools grouped by high-level category",
+  fb_caption  = paste0("Data: ghg_summary.csv (annualflux, carbondioxideeq, AllTotal)\nModels: ", paste0(model_filter, collapse = ", ")),
+  fb_labels   = TRUE
+)
+```
+
+```{r ghg-breakdown-brflux}
+for (hl in unique(br_flux_df$highlevel)) {
+  hl_p <- plotting(
+    df         = br_flux_df %>% filter(highlevel == hl),
+    figtype    = "stacked_bar",
+    fb_title_name = paste0("Baseline Annual Flux (", hl, ")"),
+    fb_figure_no  = "2.1",
+    fb_x       = "year",
+    fb_y       = "value",
+    fb_color   = "variable",
+    fb_regions = NULL,
+    fb_models  = c("V43t6_Ag"),
+    fb_years   = "2020-2065",
+    fb_scenarios = c("BASE"),
+    fb_variable  = NULL,
+    fb_y_title = "Average Annual Flux",
+    fb_y_units = "Tg CO2e/year",
+    fb_subtitle = paste0("V43t6_Ag baseline; individual GHG variables within '", hl, "'"),
+    fb_caption  = paste0("Data: ghg_summary.csv (annualflux, carbondioxideeq, AllTotal)\nModels: ", paste0(model_filter, collapse = ", ")),
+    fb_labels   = TRUE
+  )
+  
+  print(hl_p)
+}
+```
+
+```{r ghg-sum-baseflux2}
+plotting(
+  df         = ghg_sum_annual %>%  mutate(value = value / 1e6) %>%  filter(variable == "TotalNetEmis"),
+  figtype    = "timeseries",
+  fb_title_name = "Annual GHG Flux — Baseline Total Net Emissions",
+  fb_figure_no  = "2.4",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2020-2065",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_y_title  = "Net Emissions",
+  fb_y_units  = "MMT CO2e",
+  fb_subtitle = "Baseline scenario; TotalNetEmis across active models",
+  fb_caption  = "Data: ghg_summary.csv",
+  fb_hline0   = TRUE,
+  fb_points   = TRUE
+)
+```
+## Mitigation Potential
+
+```{r ghg-sum-remaining}
+# Check that this is pointing at the right values
+
+plotting(
+  df         = ghg_sum_level %>% mutate(value = value / 1e9) %>% dplyr::filter(variable == "TotalNetEmis"),
+  figtype    = "timeseries",
+  fb_title_name = "Cumulative GHG Mitigation",
+  fb_figure_no  = "2.12",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2025-2065",
+  fb_scenarios = c("$20at3", "$35at3", "$50at3", "BASE"),
+  fb_variable  = NULL,
+  fb_y_title  = "Cumulative Net Emissions",
+  fb_y_units  = "BMT CO2e",
+  fb_subtitle = "V43t6_Ag; cumulative TotalNetEmis by carbon-price scenario",
+  fb_caption  = "Data: ghg_summary.csv (set = level)",
+  fb_hline0   = TRUE,
+  fb_points   = TRUE,
+  fb_facet1 = "scenario",
+  fb_labels = TRUE
+)
+```
+# Agriculture Balance {#ag-balance}
+
+```{r ag-bal-setup}
+crops_in_data <- unique(ag_balance$commodity[
+  ag_balance$commodity %in% CROPS_COMMODITIES])
+
+livestock_in_data <- unique(ag_balance$commodity[
+  ag_balance$commodity %in% LIVESTOCK_COMMODITIES])
+```
+
+## Average Wheat Price {#ag-bal-wheat-price}
+
+```{r ag-bal-wheat-price}
+wheat_df <- 
+  ag_balance %>% 
+  filter(variable == "PriceX100", commodity %in% c("DurumWheat","HardRedSpringWheat","HardRedWinterWheat", "SoftRedWinterWheat","SoftWhiteWheat")) %>%
+  mutate(value = value / 100) %>% 
+  mutate(scenstart = as.numeric(str_sub(scenario, start = 2, end = -4)))
+
+hl_p <- 
+  plotting(
+    wheat_df %>% filter(scenario == "BASE"),
+    fb_title_name = paste0("Wheat Price (Baseline Type Comparison)"),
+    figtype    = "timeseries",
+    fb_figure_no  = "6.1",
+    fb_x       = "year",
+    fb_y       = "value",
+    fb_color   = "commodity",
+    fb_regions = NULL,
+    fb_models  = c("V43t6_Ag"),
+    fb_years   = "2015-2100",
+    fb_scenarios = NULL,
+    fb_variable  = NULL,
+    fb_y_title  = "Price",
+    fb_y_units  = "$/unit",
+    fb_subtitle = "V43t6_Ag baseline; comparison across wheat types",
+    fb_caption  = "Data: ag_balance.csv (variable = PriceX100)"
+  )
+  
+print(hl_p)
+
+for (hl in unique(wheat_df$commodity)) {
+  hl_p <- plotting(
+    wheat_df %>% filter((commodity == hl) & (scenario != "BASE")),
+    fb_title_name = paste0("Wheat Price (", hl, ")"),
+    figtype    = "timeseries",
+    fb_figure_no  = "6.1",
+    fb_x       = "year",
+    fb_y       = "value",
+    fb_color   = "scenario",
+    fb_regions = NULL,
+    fb_models  = c("V43t6_Ag"),
+    fb_years   = "2015-2100",
+    fb_scenarios = NULL,
+    fb_variable  = NULL,
+    fb_y_title  = "Price",
+    fb_y_units  = "$/unit",
+    fb_facet1   = "scenstart",
+    fb_subtitle = paste0("V43t6_Ag; ", hl, " price by scenario, faceted by starting carbon price"),
+    fb_caption  = "Data: ag_balance.csv (variable = PriceX100)"
+  )
+  
+ print(hl_p)
+}
+```
+
+## Crop Domestic Demand {#ag-bal-domdem-crops}
+
+```{r ag-bal-domdem-crops}
+# TODO: Verify units here
+
+plotting(
+  df         = ag_balance %>%
+    filter(variable == "Dom-Demand",
+           commodity %in% crops_in_data,
+           scenario == "BASE"),
+  figtype    = "timeseries",
+  fb_title_name = "Domestic Demand for Crops",
+  fb_figure_no  = "6.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "commodity",
+  fb_y_title  = "Domestic Demand",
+  fb_subtitle = "Baseline scenario; crop commodities, faceted by commodity",
+  fb_caption  = "Data: ag_balance.csv (variable = Dom-Demand)"
+)
+```
+
+## Livestock Domestic Demand {#ag-bal-domdem-livestock}
+
+```{r ag-bal-domdem-livestock}
+plotting(
+  df         = ag_balance %>%
+    filter(variable == "Dom-Demand",
+           commodity %in% livestock_in_data,
+           scenario == "BASE"),
+  figtype    = "timeseries",
+  fb_title_name = "Domestic Demand for Livestock",
+  fb_figure_no  = "6.3",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2100",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "commodity",
+  fb_y_title  = "Domestic Demand",
+  fb_subtitle = "V43t6_Ag baseline; livestock commodities, faceted by commodity",
+  fb_caption  = "Data: ag_balance.csv (variable = Dom-Demand)"
+)
+```
+
+## Livestock Exports {#ag-bal-export}
+
+```{r ag-bal-export}
+plotting(
+  df         = ag_balance %>%
+    filter(variable == "Export",
+           commodity %in% livestock_in_data,
+           scenario == "BASE"),
+  figtype    = "timeseries",
+  fb_title_name = "Livestock Exports",
+  fb_figure_no  = "6.4",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "commodity",
+  fb_y_title  = "Exports",
+  fb_subtitle = "Baseline scenario; livestock commodities across active models",
+  fb_caption  = "Data: ag_balance.csv (variable = Export)"
+)
+```
+
+## Crop Prices {#ag-bal-price}
+
+```{r ag-bal-price}
+# TODO: Fix scaling
+
+plotting(
+  df         = ag_balance %>%
+    filter(variable == "PriceX100",
+           commodity %in% crops_in_data) %>%
+    mutate(value = value / 100),
+  figtype    = "timeseries",
+  fb_title_name = "Baseline Crop Prices",
+  fb_figure_no  = "6.7",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "commodity",
+  fb_y_title  = "Price",
+  fb_y_units  = "$/unit",
+  fb_subtitle = "Baseline scenario; crop commodities across active models",
+  fb_caption  = "Data: ag_balance.csv (variable = PriceX100, scaled /100)"
+)
+```
+
+## Livestock Prices {#ag-bal-price2}
+
+```{r ag-bal-price2}
+plotting(
+  df         = ag_balance %>%
+    filter(variable == "PriceX100",
+           commodity %in% livestock_in_data) %>%
+    mutate(value = value / 100),
+  figtype    = "timeseries",
+  fb_title_name = "Livestock Prices",
+  fb_figure_no  = "6.8",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "commodity",
+  fb_y_title  = "Price",
+  fb_y_units  = "$/unit",
+  fb_subtitle = "V43t6_Ag baseline; livestock commodities, faceted by commodity",
+  fb_caption  = "Data: ag_balance.csv (variable = PriceX100, scaled /100)"
+)
+```
+
+## Soybean Production {#ag-bal-production}
+
+```{r ag-bal-production}
+# TODO: Verify units
+
+plotting(
+  df         = ag_balance %>%
+    filter(commodity == "SoybeanMeal",
+           !variable %in% c("Excess","Export","PriceX100","Proc-Use","Proc-Yld","Prod-Use")),
+  figtype    = "timeseries",
+  fb_title_name = "Soybean Meal Balance",
+  fb_figure_no  = "6.11",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2100",
+  fb_scenarios = NULL,
+  fb_variable  = NULL,
+  fb_facet1  = "variable",
+  fb_subtitle = "V43t6_Ag; balance components (excl. price/process), faceted by variable",
+  fb_caption  = "Data: ag_balance.csv (commodity = SoybeanMeal)"
+)
+```
+
+# Biodiesel {#ag-proc-biod}
+
+## Biodiesel by Process {#ag-biod-sheet1}
+
+```{r ag-biod-sheet1}
+plotting(
+  df         = ag_proc_biod %>%
+    filter(region == "Total",
+           variable != "Make_Tot_Biodiesel_from_BD"),
+  figtype    = "timeseries",
+  fb_title_name = "Biodiesel Production by Process",
+  fb_figure_no  = "7.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2020-2050",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1 = "variable",
+  fb_subtitle = "V43t6_Ag baseline; national totals by feedstock process",
+  fb_caption  = "Data: ag_proc_biod.csv (region = Total)"
+)
+```
+
+## Aggregated Biodiesel  {#ag-biod-sheet1-2}
+
+```{r ag-biod-sheet1-2}
+plotting(
+  df         = ag_proc_biod %>%
+    filter(region == "Total",
+           variable != "Make_Tot_Biodiesel_from_BD"),
+  figtype    = "stacked_bar",
+  fb_title_name = "Total Biodiesel Production",
+  fb_figure_no  = "7.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2020-2050",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_subtitle = "Baseline scenario; stacked by feedstock process",
+  fb_caption  = "Data: ag_proc_biod.csv (region = Total)",
+  fb_labels   = TRUE
+)
+```
+
+# Bioenergy {#ag-proc-elec}
+
+## Electricity by Process {#ag-elec-levels}
+
+```{r ag-elec-levels}
+# TODO: Determine how to aggregate these values
+
+plotting(
+  df         = ag_proc_elec %>%
+    filter(region == "Total"),
+  figtype    = "timeseries",
+  fb_title_name = "Electricity from Bioenergy by Process",
+  fb_figure_no  = "8.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2050",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_subtitle = "V43t6_Ag baseline; national totals by process",
+  fb_caption  = "Data: ag_proc_elec.csv (region = Total)"
+)
+```
+
+```{r ag-elec-levels3}
+plotting(
+  df         = ag_proc_elec %>%
+    group_by(year, scenario, model) %>%
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(variable = "Total Bioelectricity"),
+  figtype    = "timeseries",
+  fb_title_name = "Total Bioelectricity Production",
+  fb_figure_no  = "8.6",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2050",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_subtitle = "V43t6_Ag baseline; aggregated across processes",
+  fb_caption  = "Data: ag_proc_elec.csv (summed over variable)",
+  fb_points   = TRUE,
+  fb_labels   = TRUE
+)
+```
+## Difference from 2100 Level {#ag-elec-diff2100}
+
+```{r ag-elec-diff2100}
+
+```
+
+# Ethanol {#ag-proc-eth}
+
+## Ethanol by Process {#ag-eth-sheet1}
+
+```{r ag-eth-sheet1}
+plotting(
+  df         = ag_proc_eth %>%
+    filter(region == "Total"),
+  figtype    = "timeseries",
+  fb_title_name = "Ethanol Production by Process",
+  fb_figure_no  = "9.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "variable",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_Ag"),
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_subtitle = "V43t6_Ag baseline; national totals by feedstock process",
+  fb_caption  = "Data: ag_proc_eth.csv (region = Total)"
+)
+```
+
+# Land Balance Check {#chk-landbalance}
+
+```{r chk-landbal-setup}
+chk_lb <- chk_eq_landbalance %>%
+  filter(scenario == "BASE") %>%
+  group_by(year, region, forest_type, variable, model) %>%
+  summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  mutate(scenario = "BASE")
+```
+
+## Demand to Ag by Forest Type {#chk-lb-demand-toag}
+
+```{r chk-lb-demand-toag}
+plotting(
+  df         = chk_lb %>%
+    filter(variable == "demand_toag"),
+  figtype    = "stacked_bar",
+  fb_title_name = "Land Demand To Agriculture by Forest Type",
+  fb_figure_no  = "10.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "forest_type",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_subtitle = "Baseline scenario; land moving from forest to agriculture, stacked by forest type",
+  fb_caption  = "Data: chk_eq_landbalance.csv (variable = demand_toag)",
+  fb_labels   = TRUE
+)
+```
+
+## Overview — All Measures {#chk-lb-overview}
+
+```{r chk-lb-overview}
+plotting(
+  df         = chk_lb %>%
+    filter(variable != "demand_todev") %>%
+    group_by(year, variable, scenario, model) %>%
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop"),
+  figtype    = "timeseries",
+  fb_title_name = "Land Balance Check - All Measures",
+  fb_figure_no  = "10.2",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "model",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL,
+  fb_facet1  = "variable"
+)
+```
+
+## Supply Affor by Forest Type {#chk-lb-supply-affor}
+
+```{r chk-lb-supply-affor}
+# Tableau: chk_eq_landbalance.twb / supply affor by for_type
+# Rows: Measure; Value, Cols: Model; Year, Color: ForType
+# Filter: Measure=supply_affor, Scenario=Base
+plotting(
+  df         = chk_lb %>%
+    filter(variable == "supply_affor"),
+  figtype    = "stacked_bar",
+  fb_title_name = "Afforestation Supply by Forest Type",
+  fb_figure_no  = "10.3",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "forest_type",
+  fb_regions = NULL,
+  fb_models  = NULL,
+  fb_years   = "2015-2100",
+  fb_scenarios = c("BASE"),
+  fb_variable  = NULL
+)
+```
+
+# Forest Product Prices {#for-product-prices}
+
+*Source: For_Product_Prices.twb — data: for_product_price.csv*
+
+## Lumber & Plywood {#for-pp-lumber}
+
+```{r for-pp-lumber}
+plotting(
+  df         = for_product_price %>%
+    filter(variable %in% c("HW_Lumber","HW_Plywood","SW_Lumber","SW_Plywood")),
+  figtype    = "timeseries",
+  fb_title_name = "Lumber & Plywood Prices",
+  fb_figure_no  = "11.1",
+  fb_x       = "year",
+  fb_y       = "value",
+  fb_color   = "scenario",
+  fb_regions = NULL,
+  fb_models  = c("V43t6_For"),
+  fb_years   = "2015-2080",
+  fb_scenarios = NULL,
+  fb_variable  = c("HW_Lumber","HW_Plywood","SW_Lumber","SW_Plywood"),
+  fb_facet1  = "variable"
+)
+```

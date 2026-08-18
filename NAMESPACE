@@ -1,4 +1,12 @@
+# NOTE: this file is currently maintained by hand. If you regenerate it via
+# `devtools::document()`, ensure the operator exports below are preserved
+# (or add matching `@export` roxygen tags to the operator definitions).
+
 exportPattern("^[[:alpha:]]+")
+export("%in_or_all%")
+export("%in_or_none%")
+export("%annull%")   # deprecated alias
+export("%cancel%")   # deprecated alias
 
 ## Data manipulation ----
 importFrom(readxl, read_excel)
@@ -6,11 +14,13 @@ import(stringr)
 import(dplyr)
 import(tidyverse)
 import(tidyr)
+importFrom(tibble, as_tibble, enframe, tibble)
 importFrom(magrittr, `%>%`)
 importFrom(DT, DTOutput, renderDT, datatable)
 import(purrr)
-importFrom(readr, write_csv, read_csv)
-importFrom(cowplot, plot_grid)
+importFrom(readr, write_csv, read_csv, cols, col_character, col_integer)
+importFrom(data.table, fread)
+importFrom(cowplot, plot_grid, theme_cowplot)
 
 ## Visualization ----
 import(ggplot2)
@@ -19,4 +29,6 @@ importFrom(geomtextpath, geom_textline)
 ## Shiny ----
 import(shiny)
 importFrom(bslib, layout_columns, sidebar, nav_panel, navset_card_pill, 
-           page_fluid, page_navbar, nav_spacer, nav_item, card)
+           page_fluid, page_navbar, nav_spacer, nav_item, card,
+           accordion, accordion_panel)
+
