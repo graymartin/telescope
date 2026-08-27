@@ -337,6 +337,7 @@ var_to_figdf <- function(dataset,
                          fb_palette = "telescope",
                          fb_pct_change = FALSE,
                          fb_pct_baseline = "BASE",
+                         fb_view = "",
                          fb_preprocessors = "",
                          fb_x_breaks = "") {
   l_fig <- list(
@@ -370,6 +371,7 @@ var_to_figdf <- function(dataset,
     "palette"      = fb_palette,
     "pct_change"   = as.character(isTRUE(fb_pct_change)),
     "pct_baseline" = fb_pct_baseline,
+    "view"         = fb_view,
     "preprocessors" = if (length(fb_preprocessors))
                         paste(fb_preprocessors, collapse = ",") else "",
     "x_breaks"     = fb_x_breaks
@@ -471,6 +473,7 @@ mapping_to_var <- function(filename = "set_default.csv") {
   fb_palette = "telescope",
   fb_pct_change = FALSE,
   fb_pct_baseline = "BASE",
+  fb_view = NULL,
   fb_preprocessors = NULL,
   fb_x_breaks = NULL
 )

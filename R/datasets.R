@@ -31,8 +31,17 @@ read_fasom_data <- function(filename, entry) {
 
   gdx_container <- gamstransfer::Container$new(file)
 
+  sym <- gdx_container[entry]
+  if (is.null(sym)) {
+    stop("Symbol '", entry, "' not found in GDX file '", filename, "'.")
+  }
+  records <- sym$records
+  if (is.null(records)) {
+    stop("Symbol '", entry, "' in GDX file '", filename, "' has no records.")
+  }
+
   data_gdx <-
-    gdx_container[entry]$records %>%
+    records %>%
     mutate(datasrc = paste0(filename, "|", entry)) %>%
     mutate(entry = entry)
 
@@ -86,7 +95,7 @@ process_fasom_gdx <- function(force = FALSE) {
 
   for (i in seq_len(nrow(entries))) {
     row        <- entries[i, ]
-    model_dir  <- tools::file_path_sans_ext(row$file)  # e.g. "V43t6_Ag"
+    model_dir  <- row$model
     dest_dir   <- file.path(out_dir, model_dir)
     dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
     dest       <- file.path(dest_dir, paste0(row$out_name, ".csv"))
@@ -96,7 +105,15 @@ process_fasom_gdx <- function(force = FALSE) {
     }
 
     message("  Processing: ", row$entry, " -> ", model_dir, "/", row$out_name)
-    raw <- read_fasom_data(row$file, row$entry)
+    raw <- tryCatch(
+      read_fasom_data(row$file, row$entry),
+      error = function(e) {
+        warning("Skipping ", row$entry, " (", row$file, "): ", conditionMessage(e),
+                call. = FALSE)
+        NULL
+      }
+    )
+    if (is.null(raw)) next
 
     # Keep only wildcard (*) or model_dir-specific rows, preferring model_dir when both exist.
     entry_col_map <- col_map %>%

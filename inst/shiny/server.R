@@ -72,7 +72,7 @@ server <- shinyServer(function(input, output, session) {
     }
 
     toggles <- input$de_styling_toggles
-    is_pct  <- identical(input$de_view, "pct")
+    de_view <- input$de_view %||% "levels"
 
     df_r <- var_to_figdf(dataset = paste0(input$de_dataset, collapse = ", "),
                          figtype = input$de_figure_type,
@@ -104,8 +104,9 @@ server <- shinyServer(function(input, output, session) {
                          fb_labels = "labels" %in% toggles,
                          fb_linetype = input$de_linetype %||% "",
                          fb_palette  = input$de_palette,
-                         fb_pct_change   = is_pct,
+                         fb_pct_change   = identical(de_view, "pct"),
                          fb_pct_baseline = input$de_pct_baseline,
+                         fb_view         = de_view,
                          fb_preprocessors = input$de_preprocessors %||% character(0),
                          fb_x_breaks = input$de_x_breaks %||% "")
 
@@ -156,7 +157,7 @@ server <- shinyServer(function(input, output, session) {
   s_de_script <- reactive({
     req(input$de_dataset, input$de_figure_type, input$de_x, input$de_y)
     toggles <- input$de_styling_toggles
-    is_pct  <- identical(input$de_view, "pct")
+    de_view <- input$de_view %||% "levels"
     figure_to_script(
       dataset = as.character(input$de_dataset),
       figtype = input$de_figure_type,
@@ -188,8 +189,9 @@ server <- shinyServer(function(input, output, session) {
       fb_labels = "labels" %in% toggles,
       fb_linetype = .nz(input$de_linetype),
       fb_palette  = input$de_palette %||% "telescope",
-      fb_pct_change   = is_pct,
+      fb_pct_change   = identical(de_view, "pct"),
       fb_pct_baseline = input$de_pct_baseline %||% "BASE",
+      fb_view         = de_view,
       fb_preprocessors = input$de_preprocessors,
       fb_x_breaks = .nz(input$de_x_breaks)
     )
@@ -338,6 +340,14 @@ server <- shinyServer(function(input, output, session) {
     updateSelectInput(
       inputId = "de_scenarios",
       choices = config_scenario(df = df_de_datasets())
+    )
+
+    #### Baseline scenario (for % change view) ----
+    scen <- unlist(config_scenario(df = df_de_datasets()))
+    updateSelectInput(
+      session, "de_pct_baseline",
+      choices = scen,
+      selected = if ("BASE" %in% scen) "BASE" else scen[1]
     )
 
     #### Column pickers ----
@@ -632,13 +642,14 @@ server <- shinyServer(function(input, output, session) {
       }
     }
     
-    # In % change mode, the baseline scenario must survive the Shiny-side
-    # pre-filter because the frame passed to plotting() is already filtered;
-    # otherwise pct_from_base() finds no baseline row to divide by. Union
-    # the baseline in silently — the user's scenario selection stays intact
-    # in the UI, and pct_from_base drops the baseline before display.
+    # In a baseline-transformation view (pct or diff), the baseline scenario
+    # must survive the Shiny-side pre-filter because the frame passed to
+    # plotting() is already filtered; otherwise pct/diff_from_base() finds
+    # no baseline row to join against. Union the baseline in silently — the
+    # user's scenario selection stays intact in the UI, and the transform
+    # drops the baseline before display.
     sce_filter <- input$de_scenarios
-    if (identical(input$de_view, "pct") && !is.null(sce_filter) &&
+    if (input$de_view %in% c("pct", "diff") && !is.null(sce_filter) &&
         length(sce_filter) > 0 && nzchar(input$de_pct_baseline %||% "")) {
       sce_filter <- unique(c(sce_filter, input$de_pct_baseline))
     }
@@ -681,7 +692,7 @@ server <- shinyServer(function(input, output, session) {
     }
 
     toggles <- input$de_styling_toggles
-    is_pct  <- identical(input$de_view, "pct")
+    de_view <- input$de_view %||% "levels"
 
     plot <- plotting(df = df_de_data(),
                      figtype = input$de_figure_type,
@@ -713,8 +724,9 @@ server <- shinyServer(function(input, output, session) {
                      fb_labels = "labels" %in% toggles,
                      fb_linetype = .nz(input$de_linetype),
                      fb_palette  = input$de_palette %||% "telescope",
-                     fb_pct_change   = is_pct,
+                     fb_pct_change   = identical(de_view, "pct"),
                      fb_pct_baseline = input$de_pct_baseline %||% "BASE",
+                     fb_view         = de_view,
                      fb_preprocessors = NULL,
                      fb_x_breaks = .nz(input$de_x_breaks))
 

@@ -79,6 +79,75 @@ aggregate_by <- function(df, by, value_col = "value", variable_label = NULL) {
   out
 }
 
+# Join every non-baseline row to its baseline counterpart on `join_cols`,
+# returning `non_base` with a `.value_ref` column carrying the baseline
+# value. Shared plumbing for pct_from_base() and diff_from_base().
+#
+# On failure returns a sentinel string ("passthrough" or "empty") so the
+# caller can decide whether to hand back the input untouched or an empty
+# frame; on success returns list(non_base = <df>, join_cols = <chr>).
+.baseline_lookup <- function(df, join_cols, baseline,
+                             scenario_col, value_col, fname) {
+  if (!is.data.frame(df) || nrow(df) == 0) return("passthrough")
+  if (!scenario_col %in% names(df)) {
+    warning(fname, "(): scenario column '", scenario_col,
+            "' not found; returning input unchanged.")
+    return("passthrough")
+  }
+  if (!value_col %in% names(df)) {
+    warning(fname, "(): value column '", value_col,
+            "' not found; returning input unchanged.")
+    return("passthrough")
+  }
+
+  # NULL means "join on every remaining column" — the identity of a
+  # baseline row is everything that isn't scenario or value. This is what
+  # multivariable frames (region, model, variable, commodity, ...) need to
+  # match a scenario row to its exact baseline counterpart. Explicit
+  # join_cols still respected for narrower joins.
+  if (is.null(join_cols)) {
+    join_cols <- setdiff(names(df), c(scenario_col, value_col))
+  } else {
+    join_cols <- intersect(join_cols, names(df))
+    join_cols <- setdiff(join_cols, c(scenario_col, value_col))
+  }
+  if (!length(join_cols)) {
+    warning(fname, "(): no usable join columns after excluding ",
+            "scenario/value; returning input unchanged.")
+    return("passthrough")
+  }
+
+  if (!baseline %in% df[[scenario_col]]) {
+    warning(fname, "(): baseline '", baseline, "' not found in '",
+            scenario_col, "'; returning empty frame.")
+    return("empty")
+  }
+
+  base_df <- df %>%
+    dplyr::filter(.data[[scenario_col]] == baseline) %>%
+    dplyr::select(dplyr::all_of(c(join_cols, value_col))) %>%
+    dplyr::rename(.value_ref = dplyr::all_of(value_col))
+
+  dup_check <- base_df %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(join_cols))) %>%
+    dplyr::summarise(.n = dplyr::n(), .groups = "drop") %>%
+    dplyr::filter(.n != 1)
+  if (nrow(dup_check) > 0) {
+    warning(fname, "(): ", nrow(dup_check),
+            " join key(s) have multiple baseline rows; the first is used.")
+    base_df <- base_df %>%
+      dplyr::group_by(dplyr::across(dplyr::all_of(join_cols))) %>%
+      dplyr::slice(1) %>%
+      dplyr::ungroup()
+  }
+
+  non_base <- df %>%
+    dplyr::filter(.data[[scenario_col]] != baseline) %>%
+    dplyr::left_join(base_df, by = join_cols)
+
+  list(non_base = non_base, join_cols = join_cols)
+}
+
 #' Convert a level series to % change vs. a baseline scenario
 #'
 #' Ported from `resource/app.R::pct_from_base()`. For each combination of
@@ -97,7 +166,9 @@ aggregate_by <- function(df, by, value_col = "value", variable_label = NULL) {
 #'
 #' @param df Data frame.
 #' @param join_cols Character vector of columns identifying a matched
-#'   baseline row per scenario (e.g. `c("year", "commodity")`).
+#'   baseline row per scenario (e.g. `c("year", "commodity")`). When
+#'   `NULL` (default), joins on every column other than `scenario_col`
+#'   and `value_col` so multivariable frames match row-for-row.
 #' @param baseline Scenario value used as the denominator. Default
 #'   `"BASE"`.
 #' @param scenario_col Column holding scenario codes. Default `"scenario"`.
@@ -106,66 +177,52 @@ aggregate_by <- function(df, by, value_col = "value", variable_label = NULL) {
 #'   filtered out. Non-baseline rows without a matching baseline yield
 #'   `NA_real_`.
 #' @export
-pct_from_base <- function(df, join_cols,
+pct_from_base <- function(df, join_cols = NULL,
                           baseline = "BASE",
                           scenario_col = "scenario",
                           value_col = "value") {
-  if (!is.data.frame(df) || nrow(df) == 0) return(df)
-  if (!scenario_col %in% names(df)) {
-    warning("pct_from_base(): scenario column '", scenario_col,
-            "' not found; returning input unchanged.")
-    return(df)
-  }
-  if (!value_col %in% names(df)) {
-    warning("pct_from_base(): value column '", value_col,
-            "' not found; returning input unchanged.")
-    return(df)
-  }
+  prep <- .baseline_lookup(df, join_cols, baseline,
+                           scenario_col, value_col, "pct_from_base")
+  if (identical(prep, "passthrough")) return(df)
+  if (identical(prep, "empty")) return(df[0, , drop = FALSE])
 
-  join_cols <- intersect(join_cols, names(df))
-  join_cols <- setdiff(join_cols, c(scenario_col, value_col))
-  if (!length(join_cols)) {
-    warning("pct_from_base(): no usable join columns after excluding ",
-            "scenario/value; returning input unchanged.")
-    return(df)
-  }
-
-  if (!baseline %in% df[[scenario_col]]) {
-    warning("pct_from_base(): baseline '", baseline, "' not found in '",
-            scenario_col, "'; returning empty frame.")
-    return(df[0, , drop = FALSE])
-  }
-
-  base_df <- df %>%
-    dplyr::filter(.data[[scenario_col]] == baseline) %>%
-    dplyr::select(dplyr::all_of(c(join_cols, value_col))) %>%
-    dplyr::rename(.value_ref = dplyr::all_of(value_col))
-
-  dup_check <- base_df %>%
-    dplyr::group_by(dplyr::across(dplyr::all_of(join_cols))) %>%
-    dplyr::summarise(.n = dplyr::n(), .groups = "drop") %>%
-    dplyr::filter(.n != 1)
-  if (nrow(dup_check) > 0) {
-    warning("pct_from_base(): ", nrow(dup_check),
-            " join key(s) have multiple baseline rows; the first is used.")
-    base_df <- base_df %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(join_cols))) %>%
-      dplyr::slice(1) %>%
-      dplyr::ungroup()
-  }
-
-  bad_base <- base_df %>%
+  bad_base <- prep$non_base %>%
     dplyr::filter(is.na(.value_ref) | .value_ref == 0)
   if (nrow(bad_base) > 0) {
     warning("pct_from_base(): ", nrow(bad_base),
             " baseline value(s) are zero or NA \u2014 pct will be Inf/NaN.")
   }
 
-  df %>%
-    dplyr::filter(.data[[scenario_col]] != baseline) %>%
-    dplyr::left_join(base_df, by = join_cols) %>%
+  prep$non_base %>%
     dplyr::mutate(!!dplyr::sym(value_col) :=
                     100 * (.data[[value_col]] - .value_ref) / .value_ref) %>%
+    dplyr::select(-.value_ref)
+}
+
+#' Convert a level series to a difference vs. a baseline scenario
+#'
+#' Companion to [pct_from_base()]. For each combination of `join_cols`,
+#' finds the row whose `scenario_col == baseline` and returns the other
+#' rows with `value_col` replaced by `value - value_ref`. Same warnings
+#' as `pct_from_base()` except the zero-denominator check is skipped
+#' (subtraction handles zero baselines naturally).
+#'
+#' @inheritParams pct_from_base
+#' @return `df` with `value_col` replaced by the scenario-minus-baseline
+#'   difference and baseline rows filtered out.
+#' @export
+diff_from_base <- function(df, join_cols = NULL,
+                           baseline = "BASE",
+                           scenario_col = "scenario",
+                           value_col = "value") {
+  prep <- .baseline_lookup(df, join_cols, baseline,
+                           scenario_col, value_col, "diff_from_base")
+  if (identical(prep, "passthrough")) return(df)
+  if (identical(prep, "empty")) return(df[0, , drop = FALSE])
+
+  prep$non_base %>%
+    dplyr::mutate(!!dplyr::sym(value_col) :=
+                    .data[[value_col]] - .value_ref) %>%
     dplyr::select(-.value_ref)
 }
 

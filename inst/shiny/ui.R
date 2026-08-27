@@ -126,17 +126,30 @@ de_sidebar_options <- list(
   ),
 
   # View mode: raw levels vs. % change relative to a baseline scenario.
-  # The baseline value stays free-text so users on non-FASOM scenario
-  # naming can adapt without editing the app.
+  # Baseline choices are populated by the server from the loaded dataset's
+  # scenarios so users always pick a value that actually exists.
   layout_columns(
     radioButtons(
       "de_view",
       "View",
-      choices = c("Levels" = "levels", "% change vs. baseline" = "pct"),
+      choices = c("Levels" = "levels",
+                  "% change vs. baseline" = "pct",
+                  "Difference vs. baseline" = "diff"),
       selected = "levels",
       inline = TRUE
     ),
-    textInput("de_pct_baseline", "Baseline scenario", value = "BASE")
+    selectInput("de_pct_baseline", "Baseline scenario", choices = NULL)
+  ),
+
+  # Preprocessors: registry-driven derived-column steps applied before
+  # filtering. Kept top-level (not inside Styling) so the checkboxes are
+  # discoverable when a matching dataset is loaded.
+  tags$details(
+    open = NA,
+    tags$summary("Data preprocessors"),
+    div(style = "margin-top: 8px;",
+        checkboxGroupInput("de_preprocessors", NULL,
+                           choices = character(0)))
   ),
 
   # Styling block: everything that maps to a fb_* parameter on plotting()
@@ -183,11 +196,7 @@ de_sidebar_options <- list(
                     "Zero reference line" = "hline0",
                     "Data labels"    = "labels"),
         inline = TRUE
-      ),
-      # Preprocessors: registry-driven derived-column steps. Choices are
-      # filtered per-dataset by the server.
-      checkboxGroupInput("de_preprocessors", "Data preprocessors",
-                         choices = character(0))
+      )
     )
   ),
   

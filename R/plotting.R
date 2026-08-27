@@ -52,13 +52,16 @@
 #' @param fb_palette One of `"telescope"` (default; Okabe-Ito discrete /
 #'   viridis continuous) or `"fasom_scenario"` (fixed ozone-scenario
 #'   palette from the FASOM reporting materials).
-#' @param fb_pct_change If `TRUE`, applies [pct_from_base()] to `df` before
-#'   plotting; the y column is replaced by pct-change vs. `fb_pct_baseline`
-#'   and rows with `scenario == fb_pct_baseline` are dropped. When `TRUE`
-#'   and `fb_y_title` is not supplied, the y-axis label becomes
-#'   `"% change vs. <baseline>"`.
-#' @param fb_pct_baseline Scenario value used as the denominator when
-#'   `fb_pct_change = TRUE`. Default `"BASE"`.
+#' @param fb_view One of `"levels"` (raw values, default), `"pct"`
+#'   (applies [pct_from_base()] to `df` before plotting; y becomes pct
+#'   change vs. `fb_pct_baseline`), or `"diff"` (applies
+#'   [diff_from_base()]; y becomes scenario minus baseline). In both
+#'   transformed views the baseline row is dropped and a y-axis label is
+#'   auto-populated when `fb_y_title` is empty.
+#' @param fb_pct_change Legacy boolean shortcut for `fb_view = "pct"`.
+#'   Retained for back-compat; ignored when `fb_view` is set explicitly.
+#' @param fb_pct_baseline Scenario value used as the baseline when
+#'   `fb_view` is `"pct"` or `"diff"`. Default `"BASE"`.
 #' @return A ggplot (or `cowplot::plot_grid` for MACC).
 #' @export
 plotting <- function(df,
@@ -91,11 +94,20 @@ plotting <- function(df,
                      fb_palette = c("telescope", "fasom_scenario"),
                      fb_pct_change = FALSE,
                      fb_pct_baseline = "BASE",
+                     fb_view = NULL,
                      fb_preprocessors = NULL,
                      fb_x_breaks = NULL) {
   fb_palette <- match.arg(fb_palette)
   # Empty strings from Shiny inputs / persisted CSVs should behave as "unset".
   if (!is.null(fb_linetype) && !nzchar(fb_linetype)) fb_linetype <- NULL
+
+  # Resolve view: explicit fb_view wins; otherwise fall back to the legacy
+  # fb_pct_change boolean so existing callers (RMarkdown reports, saved
+  # CSVs) keep working without change.
+  if (is.null(fb_view) || !nzchar(fb_view)) {
+    fb_view <- if (isTRUE(fb_pct_change)) "pct" else "levels"
+  }
+  fb_view <- match.arg(fb_view, c("levels", "pct", "diff"))
 
   # Normalize preprocessor list: accept NULL, empty, character vector, or a
   # single comma-joined string (persisted form from var_to_figdf()).
@@ -108,10 +120,11 @@ plotting <- function(df,
     if (!length(fb_preprocessors)) fb_preprocessors <- NULL
   }
 
-  # When pct_change is on, the baseline scenario must survive the scenario
-  # filter or pct_from_base() has nothing to divide by. Inject it silently;
-  # pct_from_base drops baseline rows before returning.
-  if (isTRUE(fb_pct_change) && !is.null(fb_scenarios) &&
+  # When a baseline transformation is active, the baseline scenario must
+  # survive the scenario filter or the transform has nothing to join
+  # against. Inject it silently; pct/diff_from_base drop baseline rows
+  # before returning.
+  if (fb_view %in% c("pct", "diff") && !is.null(fb_scenarios) &&
       length(fb_scenarios) > 0 && nzchar(fb_pct_baseline) &&
       !fb_pct_baseline %in% fb_scenarios) {
     fb_scenarios <- c(fb_scenarios, fb_pct_baseline)
@@ -145,7 +158,7 @@ plotting <- function(df,
     labels      = isTRUE(fb_labels),
     linetype_col  = fb_linetype,
     palette       = fb_palette,
-    pct_change    = isTRUE(fb_pct_change),
+    view          = fb_view,
     pct_baseline  = fb_pct_baseline,
     preprocessors = fb_preprocessors,
     x_breaks      = fb_x_breaks
@@ -175,23 +188,24 @@ plot_prepare <- function(df, params) {
     options_list = params$options
   )
 
-  # % change vs. baseline. Applied after filtering (so the baseline row is
-  # present in the frame) but before facet/label resolution (so y_lab picks
-  # up the pct override when the caller hasn't set fb_y_title).
-  if (isTRUE(params$pct_change) && !identical(params$figtype, "MACC")) {
-    join_cols <- unique(c(
-      params$x_col,
-      params$color_col,
-      params$linetype_col,
-      if (nzchar(params$facet1)) params$facet1,
-      if (nzchar(params$facet2)) params$facet2
-    ))
-    join_cols <- join_cols[!is.null(join_cols) & nzchar(join_cols)]
-    df <- pct_from_base(df, join_cols = join_cols,
-                        baseline = params$pct_baseline,
-                        value_col = params$y_col)
+  # Baseline transformations. Applied after filtering (so the baseline row
+  # is present in the frame) but before facet/label resolution (so y_lab
+  # picks up the auto-label when the caller hasn't set fb_y_title). We
+  # pass join_cols = NULL so pct_from_base / diff_from_base join on every
+  # non-scenario/non-value column — this is what multivariable frames
+  # (region, model, variable, ...) need to match each scenario row to its
+  # exact baseline counterpart, rather than accidentally aggregating.
+  if (params$view %in% c("pct", "diff") &&
+      !identical(params$figtype, "MACC")) {
+    transform <- if (identical(params$view, "pct")) pct_from_base
+                 else diff_from_base
+    df <- transform(df, join_cols = NULL,
+                    baseline = params$pct_baseline,
+                    value_col = params$y_col)
     if (is.null(params$y_title)) {
-      params$y_title <- paste0("% change vs. ", params$pct_baseline)
+      params$y_title <- if (identical(params$view, "pct"))
+                          paste0("% change vs. ", params$pct_baseline)
+                        else paste0("Difference vs. ", params$pct_baseline)
     }
   }
 
@@ -626,6 +640,10 @@ plotting_style <- function(plot, x_lab = "", y_lab = "", ...) {
   for (k in intersect(names(s), num_fields)) {
     n <- suppressWarnings(as.numeric(s[[k]]))
     s[[k]] <- if (length(n) == 1L && is.finite(n)) n else NULL
+  }
+  # Blank `view` cells should not override plotting()'s NULL default.
+  if ("view" %in% names(s) && (length(s$view) != 1L || !nzchar(s$view))) {
+    s$view <- NULL
   }
   s
 }
