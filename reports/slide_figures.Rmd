@@ -2,18 +2,20 @@
 title: "FASOM Results"
 date: "`r Sys.Date()`"
 output:
+  powerpoint_presentation:
+    reference_doc: template.pptx
   html_document:
+    theme: united
     toc: TRUE
     toc_float:
-      collapsed: TRUE
+      collapsed: FALSE
     toc_depth: 3
     code_folding: "hide"
     number_sections: TRUE
 ---
-# Setup
 ```{r setup, include=FALSE}
 devtools::load_all(".")
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
                       fig.width = 11, fig.height = 7, dpi = 150)
 
 knitr::opts_chunk$set(
@@ -33,6 +35,464 @@ process_fasom_gdx(force = FALSE)
 year_range <- "2020-2060"
 ```
 
+# Slides
+
+## Land Use Totals
+
+```{r, land-use-totals}
+df <- 
+  telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/total_acres.csv") %>% 
+  group_by(scenario, variable, year, datasrc, unit) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total") %>% 
+  mutate(value = value/1000) %>% 
+  mutate(units = "million acres")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Total Acreage by Land Type",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = c("Cropland", "Pasture", "CropLand_Pasture", "ForestLand"),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_title = "Value",
+  fb_y_units = "million acres",
+  fb_subtitle = "BASE, 75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/total_acres.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+```
+
+## Cumulative Land Transfer
+
+```{r, cumulative-land-transfer}
+cap_first <- function(x) {
+  paste0(toupper(substr(x, 1, 1)), substr(x, 2, nchar(x)))
+}
+
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulative.csv") %>% 
+  mutate(change = case_when(stringr::str_starts(variable, stringr::coll("To", ignore_case = TRUE)) ~ "Loss",
+                               stringr::str_starts(variable, stringr::coll("From", ignore_case = TRUE)) ~ "Gain",
+                               TRUE ~ "Flag")) %>% 
+  mutate(variable = case_when(stringr::str_starts(variable, stringr::coll("To", ignore_case = TRUE)) ~ cap_first(gsub("To", "", cap_first(variable), ignore.case = TRUE)),
+                              stringr::str_starts(variable, stringr::coll("From", ignore_case = TRUE)) ~ cap_first(gsub("From", "", cap_first(variable), ignore.case = TRUE)),
+                               TRUE ~ "Flag")) %>% 
+  mutate(value = case_when(change == "Loss" ~ -value,
+                           TRUE ~ value)) %>% 
+  mutate(variable = case_when(variable == "Crop" ~ "Cropland",
+                              TRUE ~ variable)) %>% 
+  group_by(scenario, variable, year, datasrc, unit, change, land_from) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "stacked_bar",
+  fb_title_name = "Cumulative Land Transfers",
+  fb_subtitle = "Baseline scenario",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "variable",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE"), 
+  fb_variable = c(
+    "CroplandPasture",
+    "CRPProgram",
+    "Cropland",
+    "Forest",
+    "Pasture", 
+    "Development"
+  ),
+  fb_facet1 = "land_from",
+  fb_labels = TRUE,
+  fb_y_title = "Value",
+  fb_y_units = "thousand acres",
+  fb_options = "Start y axis at 0",
+  fb_view = "levels",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulative.csv"
+)
+
+print(plot)
+```
+
+
+## Crops
+### Crop Harvested Area
+
+```{r, crop-harvested-area}
+df <- 
+  read_dataset("temphere.csv",  model_filter = "2026_IASD_RYG_v4_2026") %>% 
+  dplyr::filter(category %in% "ALL") %>% 
+  dplyr::filter(region %in% "US") %>% 
+  mutate(region = "Total")
+
+df_wheat <- df %>% 
+  dplyr::filter(variable %in% c(
+    "DurumWheat",
+    "SoftWhiteWheat",
+    "HardRedWinterWheat",
+    "SoftRedWinterWheat",
+    "HardRedSpringWheat"
+  )) %>% 
+  group_by(year, country, region, category, scenario, entry, model) %>% 
+  summarize(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(variable = "Wheat")
+
+df <- bind_rows(df, df_wheat)
+  
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "FASOM Difference in Crop Harvested Acreage",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("75ppb", "70ppb", "65ppb"),
+  fb_variable = c("Corn", "Cotton", "Rice", "Soybeans", "Wheat"),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_title = "Difference from baseline (thousand acres)",
+  fb_subtitle = "2020-2060 US difference from baseline; cotton, wheat, corn, rice, and soybeans",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/temphere.csv", 
+  fb_view = "diff",
+  fb_hline0 = TRUE
+)
+
+print(plot)
+```
+
+### Crop Production
+
+```{r, crop-production}
+df_raw <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/n_acompareBALANCEP.csv") %>% 
+  dplyr::filter(variable %in% c("Production"))
+
+df_wheat <- df_raw %>% 
+  dplyr::filter(commodity %in% c(
+    "DurumWheat",
+    "SoftWhiteWheat",
+    "HardRedWinterWheat",
+    "SoftRedWinterWheat",
+    "HardRedSpringWheat"
+  )) %>% 
+  group_by(year, variable, scenario, entry, model) %>% 
+  summarize(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(commodity = "Wheat")
+
+df <- bind_rows(df_raw, df_wheat) %>% 
+  dplyr::filter(commodity %in% c("Rice", "Cotton", "Soybeans", "Corn", "Wheat"))
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Major Crop Production",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2100",
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = "Production",
+  fb_facet1 = "commodity",
+  fb_options = "Start y axis at 0, Aggregate variables",
+  fb_x_title = "Year",
+  fb_y_title = "Production change (units produced)",
+  fb_subtitle = "Relative to baseline",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/n_acompareBALANCEP.csv",
+  fb_hline0 = TRUE,
+  fb_view = "diff"
+)
+
+print(plot)
+```
+
+### Crop Price
+
+```{r, crop-price}
+df_raw <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/n_acompareBALANCEP.csv") %>% 
+  dplyr::filter(variable %in% c("PriceX100"))
+
+df_wheat <- df_raw %>% 
+  dplyr::filter(commodity %in% c(
+    "DurumWheat",
+    "SoftWhiteWheat",
+    "HardRedWinterWheat",
+    "SoftRedWinterWheat",
+    "HardRedSpringWheat"
+  )) %>% 
+  group_by(year, variable, scenario, entry, model) %>% 
+  summarize(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(commodity = "Wheat")
+
+df <- bind_rows(df_raw, df_wheat) %>% 
+  dplyr::filter(commodity %in% c("Rice", "Cotton", "Soybeans", "Corn", "Wheat"))
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Major Crop Prices",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2100",
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = "PriceX100",
+  fb_facet1 = "commodity",
+  fb_options = "Start y axis at 0, Aggregate variables",
+  fb_x_title = "Year",
+  fb_y_title = "Percent difference from baseline price ($/unit)",
+  fb_subtitle = "Relative to baseline",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/n_acompareBALANCEP.csv",
+  fb_hline0 = TRUE,
+  fb_view = "pct"
+)
+
+print(plot)
+```
+
+## Forest
+### Forest Area
+
+```{r, forest-area}
+
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv") %>%
+  group_by(scenario, variable, year, datasrc, unit) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total") %>% 
+  mutate(value = value/1000) %>% 
+  mutate(units = "million acres")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "FASOM Forest Acres",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2060",
+  fb_scenarios = NULL,
+  fb_variable = c(
+    "Forest_Hardwood",
+    "Planted_Pine",
+    "Planted_Doug-fir",
+    "Forest_Pine",
+    "Forest_Doug-fir",
+    "Forest_Softwood",
+    "Planted_Softwood",
+    "Forest_OakPine",
+    "Forest_Softwood"
+  ),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_units = "million acres",
+  fb_subtitle = "All scenarios",
+  fb_y_title = "Forest area",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+```
+
+### Forest Production
+
+```{r, forest-production}
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/Manufacturing_Output.csv") %>% 
+  mutate(variable = case_when(
+    variable == "SW_Plywood" ~ "Plywood",
+    variable == "HW_Plywood" ~ "Plywood",
+    variable == "HW_Lumber" ~ "Lumber",
+    variable == "SW_Lumber" ~ "Lumber",
+    variable == "MDF" ~ "Panels",
+    variable == "OSB" ~ "Panels",
+    variable == "OthPanels" ~ "Panels",
+    variable == "Tissue" ~ "Paper",
+    variable == "Pulp_Mech" ~ "Paper",
+    variable == "Pulp_Chem" ~ "Paper",
+    variable == "Newsprint" ~ "Paper",
+    variable == "P_W_Paper" ~ "Paper",
+    variable == "Paperboard" ~ "Paper",
+    TRUE ~ variable
+  )) %>% 
+  dplyr::filter(!(variable %in% c("BioPower", "For_Pellets"))) %>% 
+  group_by(scenario, year, variable, model, unit) %>% 
+  summarize(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup()
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Forest Manufacturing Output",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = c(
+    "Lumber",
+    "Plywood",
+    "Panels",
+    "Paper"
+  ),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_title = "Production percent change (units produced)",
+  fb_subtitle = "BASE, 75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/Manufacturing_Output.csv",
+  fb_view = "pct",
+  fb_hline0 = TRUE
+)
+
+print(plot)
+```
+
+### Forest Price
+
+```{r, forest-price}
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/for_product_price.csv") %>% 
+  mutate(variable = case_when(
+    variable == "SW_Plywood" ~ "Plywood",
+    variable == "HW_Plywood" ~ "Plywood",
+    variable == "HW_Lumber" ~ "Lumber",
+    variable == "SW_Lumber" ~ "Lumber",
+    variable == "MDF" ~ "Panels",
+    variable == "OSB" ~ "Panels",
+    variable == "OthPanels" ~ "Panels",
+    variable == "Tissue" ~ "Paper",
+    variable == "Pulp_Mech" ~ "Paper",
+    variable == "Pulp_Chem" ~ "Paper",
+    variable == "Newsprint" ~ "Paper",
+    variable == "P_W_Paper" ~ "Paper",
+    variable == "Paperboard" ~ "Paper",
+    TRUE ~ variable
+  )) %>% 
+  dplyr::filter(!(variable %in% c("BioPower", "For_Pellets"))) %>% 
+  group_by(scenario, year, variable, model, unit) %>% 
+  summarize(value = sum(value, na.rm = TRUE)) %>% 
+  ungroup()
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Forest Commodity Prices",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = c(
+    "Lumber",
+    "Plywood",
+    "Panels",
+    "Paper"
+  ),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_units = "$/unit",
+  fb_y_title = "Percent change in price",
+  fb_subtitle = "BASE, 75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/for_product_price.csv",
+  fb_view = "pct",
+  fb_hline0 = TRUE
+)
+
+print(plot)
+```
+
+## Welfare
+
+```{r, welfare-bar}
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/n_wcomparesummaryAnn40.csv") %>% 
+  dplyr::filter(category %in% "US") %>% 
+  mutate(variable = case_when(variable == "US_dom_demand" ~ "Consumer",
+                              variable == "producer" ~ "Producer",
+                              variable == "Process" ~ "Processing",
+                              TRUE ~ variable)) %>% 
+  mutate(subcategory = case_when(subcategory == "Ag" ~ "Agriculture",
+                                 subcategory == "forest" ~ "Forestry",
+                                 TRUE ~ subcategory)) %>% 
+  dplyr::filter(!(variable %in% c("grtotal")))
+
+df_total <- df %>% 
+  group_by(category, subcategory, model) %>% 
+  mutate(base_sum = sum(value[scenario == "BASE"], na.rm = TRUE)) %>% 
+  group_by(category, subcategory, scenario, model) %>% 
+  summarize(value = sum(value, na.rm = TRUE) - base_sum) %>%
+  ungroup() %>% 
+  mutate(variable = "Total") %>% 
+  dplyr::filter(!(scenario %in% c("BASE"))) %>% 
+  unique() %>% 
+  mutate(label = format(value, digits = 5)) %>% 
+  mutate(value = value + value*0.02 + 5000)
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "stacked_bar",
+  fb_title_name = "Annualized (2020-2040) Welfare Difference from Baseline Including Processing",
+  fb_figure_no = "",
+  fb_x = "scenario",
+  fb_y = "value",
+  fb_color = "variable",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2100",
+  fb_scenarios = c("75ppb", "70ppb", "65ppb"),
+  fb_variable = c("Consumer", "Producer", "Processing"),
+  fb_facet1 = "subcategory",
+  fb_x_title = "Scenario",
+  fb_y_title = "Welfare change",
+  fb_y_units = "$",
+  fb_subtitle = "75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/n_wcomparesummaryAnn40.csv",
+  fb_facet_scales = "fixed",
+  fb_labels = TRUE,
+  fb_view = "diff"
+) +
+  geom_label(data = df_total, aes(label = label), show.legend = FALSE) 
+
+print(plot)
+```
+
+
+# Other Slides
 ## Ozone Inputs
 
 ```{r load-ozone-data, message=FALSE, warning=FALSE, include=FALSE}
@@ -143,7 +603,6 @@ plot <- telescope::plotting(
 
 print(plot)
 ```
-
 ### Scenarios
 
 ```{r, ozone-yield-scenario}
@@ -428,6 +887,7 @@ print(plot)
 
 # TODO: Add 70ppb and 65ppb
 ```
+
 ## Comparison Indices
 
 ```{r, indices}
@@ -575,7 +1035,7 @@ plot <- telescope::plotting(
 print(plot)
 ```
 
-```{r, welfare-bar}
+```{r, welfare-bars}
 df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/n_wcomparesummaryAnn40.csv") %>% 
   dplyr::filter(category %in% "US") %>% 
   mutate(variable = case_when(variable == "US_dom_demand" ~ "Consumer",
@@ -601,7 +1061,7 @@ plot <- telescope::plotting(
   fb_variable = c("Consumer", "Producer"),
   fb_facet1 = "subcategory",
   fb_x_title = "Scenario",
-  fb_y_title = "Welfare Change",
+  fb_y_title = "Welfare change",
   fb_y_units = "$",
   fb_subtitle = "75ppb, 70ppb, 65ppb",
   fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/n_wcomparesummaryAnn40.csv",
@@ -627,7 +1087,7 @@ plot <- telescope::plotting(
   fb_variable = c("Consumer", "Producer", "Processing"),
   fb_facet1 = "subcategory",
   fb_x_title = "Scenario",
-  fb_y_title = "Welfare Change",
+  fb_y_title = "Welfare change",
   fb_y_units = "$",
   fb_subtitle = "75ppb, 70ppb, 65ppb",
   fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/n_wcomparesummaryAnn40.csv",
@@ -639,3 +1099,202 @@ plot <- telescope::plotting(
 print(plot)
 ```
 
+## Forest Acreage
+
+```{r, forest-acreage-dep}
+# TODO: Check how this should be aggregated
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv") %>%
+  group_by(scenario, variable, year, datasrc, unit) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total") %>% 
+  mutate(value = value/1000) %>% 
+  mutate(units = "million acres")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "FASOM Forest Acres",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2060",
+  fb_scenarios = NULL,
+  fb_variable = c(
+    "Forest_Hardwood",
+    "Planted_Pine",
+    "Planted_Doug-fir",
+    "Forest_Pine",
+    "Forest_Doug-fir",
+    "Forest_Softwood",
+    "Planted_Softwood",
+    "Forest_OakPine",
+    "Forest_Softwood"
+  ),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_units = "million acres",
+  fb_subtitle = "All scenarios",
+  fb_y_title = "Forest area",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+```
+
+```{r, forest-acreage-single}
+# TODO: Check how this should be aggregated
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv") %>%
+  group_by(scenario, category, year, datasrc, unit) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total") %>% 
+  mutate(value = value/1000) %>% 
+  mutate(units = "million acres") %>% 
+  mutate(variable = "Forest Land") %>% 
+  dplyr::filter(category %in% "private") %>% 
+  mutate(category = "Private")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "FASOM Private Forest Land",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2060",
+  fb_scenarios = NULL,
+  fb_variable = c(
+    "Forest Land"
+  ),
+  fb_facet1 = "category",
+  fb_x_title = "Year",
+  fb_y_units = "million acres",
+  fb_subtitle = "All scenarios",
+  fb_y_title = "Forest area",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "FASOM Private Forest Land",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = "2020-2060",
+  fb_scenarios = NULL,
+  fb_variable = c(
+    "Forest Land"
+  ),
+  fb_facet1 = "category",
+  fb_x_title = "Year",
+  fb_y_units = "% change from baseline",
+  fb_subtitle = "All scenarios, % difference from baseline",
+  fb_y_title = "Forest area",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/totalforacres.csv",
+  fb_view = "pct"
+)
+
+print(plot)
+```
+
+## Forest Products
+
+```{r, for_prod_price}
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/for_product_price.csv")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Forest Commodity Prices",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = c(
+    "SW_Lumber",
+    "HW_Lumber",
+    "SW_Plywood",
+    "HW_Plywood",
+    "OSB",
+    "OthPanels",
+    "MDF",
+    "For_Pellets",
+    "Newsprint",
+    "P_W_Paper",
+    "Paperboard",
+    "Tissue"
+  ),
+  fb_facet1 = "variable",
+  fb_options = "Start y axis at 0",
+  fb_x_title = "Year",
+  fb_y_units = "$/unit",
+  fb_y_title = "Value",
+  fb_subtitle = "BASE, 75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/for_product_price.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+```
+
+```{r, for_prod_mfg}
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/Manufacturing_Output.csv")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "timeseries",
+  fb_title_name = "Forest Manufacturing Output",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "scenario",
+  fb_regions = NULL,
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE", "75ppb", "70ppb", "65ppb"),
+  fb_variable = c(
+    "SW_Lumber",
+    "HW_Lumber",
+    "SW_Plywood",
+    "HW_Plywood",
+    "OthPanels",
+    "OSB",
+    "MDF",
+    "For_Pellets",
+    "Newsprint",
+    "P_W_Paper",
+    "Paperboard",
+    "Tissue",
+    "Pulp_Chem",
+    "Pulp_Mech",
+    "BioPower"
+  ),
+  fb_facet1 = "variable",
+  fb_x_title = "Year",
+  fb_y_title = "Units",
+  fb_subtitle = "BASE, 75ppb, 70ppb, 65ppb",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/Manufacturing_Output.csv",
+  fb_view = "levels"
+)
+
+print(plot)
+```

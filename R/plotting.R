@@ -552,8 +552,8 @@ plotting_bar <- function(plot, df, y_col = NULL, labels = FALSE) {
     bar <- bar + geom_text(
       data = df,
       aes(label = .fmt_label(!!sym(y_col))),
-      position = position_dodge(width = 0.7),
-      vjust = -0.3, size = 3, color = "black", show.legend = FALSE
+      position = position_dodge(width = 0.5),
+      vjust = -0.3, size = 2.5, color = "black", show.legend = FALSE
     )
   }
   return(bar)
@@ -572,7 +572,7 @@ plotting_stacked_bar <- function(plot, df, x_col = NULL, y_col = NULL, labels = 
       dplyr::mutate(.share = abs(!!sym(y_col)) /
                              sum(abs(!!sym(y_col)), na.rm = TRUE)) %>%
       dplyr::ungroup() %>%
-      dplyr::mutate(.lbl = ifelse(is.finite(.share) & .share >= 0.05,
+      dplyr::mutate(.lbl = ifelse(is.finite(.share) & .share >= 0.025,
                                   .fmt_label(!!sym(y_col)), NA_character_))
 
     bar <- bar + geom_text(
