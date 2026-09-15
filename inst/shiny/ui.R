@@ -121,6 +121,7 @@ de_sidebar_options <- list(
     NULL,
     choices = list("Start y axis at 0" = "Start y axis at 0",
                    "Aggregate variables" = "Aggregate variables",
+                   "Aggregate regions" = "Aggregate regions",
                    "Show plot details" = "Show plot details"),
     selected = list("Start y axis at 0", "Aggregate variables")
   ),

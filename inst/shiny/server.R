@@ -685,10 +685,21 @@ server <- shinyServer(function(input, output, session) {
     req(input$de_dataset)
     req(input$de_variable)
 
+    # df_de_data() has already been through plotting_filter(), so with an
+    # aggregate option on its `variable` / `region` values are the collapsed
+    # labels. plotting() filters again, so hand it the label that is in the
+    # frame rather than the user's original selection, which no longer
+    # matches any row.
     if ("Aggregate variables" %in% input$de_options) {
       de_variable <- c("Aggregated")
     } else {
       de_variable <- input$de_variable
+    }
+
+    if ("Aggregate regions" %in% input$de_options) {
+      de_regions <- c("Aggregated")
+    } else {
+      de_regions <- input$de_regions
     }
 
     toggles <- input$de_styling_toggles
@@ -701,7 +712,7 @@ server <- shinyServer(function(input, output, session) {
                      fb_x = input$de_x,
                      fb_y = input$de_y,
                      fb_color = input$de_color,
-                     fb_regions = input$de_regions,
+                     fb_regions = de_regions,
                      fb_models = input$de_models,
                      fb_years = s_de_years(),
                      fb_scenarios = input$de_scenarios,

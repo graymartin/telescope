@@ -443,6 +443,18 @@ plotting_filter <- function(df, reg_f, mod_f, yrs_f, sce_f, var_f, y_col, option
       mutate(variable = "Aggregated")
   }
 
+  # Sum across the regions that survived the region filter, collapsing them
+  # into a single "Aggregated" region. Runs after the variable aggregation
+  # above; either order yields the same sums.
+  if ("Aggregate regions" %in% options_list && "region" %in% names(df)) {
+    df <-
+      df %>%
+      group_by(across(c(-region, -!!sym(y_col)))) %>%
+      summarize(!!sym(y_col) := sum(!!sym(y_col), na.rm = TRUE), .groups = "drop") %>%
+      ungroup() %>%
+      mutate(region = "Aggregated")
+  }
+
   if (y_col == "p") {
     df <- arrange(df, p)
   }

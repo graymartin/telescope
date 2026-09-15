@@ -130,6 +130,12 @@ process_fasom_gdx <- function(force = FALSE) {
       warning("Unknown columns in ", row$entry, " (dropping): ", paste(unknown_cols, collapse = ", "))
     }
 
+    # Split this entry's FASOM_col rows into the ones that matched a column
+    # in the GDX records and the ones that did not, so the log can state
+    # which mapping rows were actually ingested.
+    matched_map   <- dplyr::filter(entry_col_map, raw_col %in% names(raw))
+    unmatched_map <- dplyr::filter(entry_col_map, !raw_col %in% names(raw))
+
     # Build rename vector from FASOM_col
     rename_vec <- setNames(entry_col_map$raw_col, entry_col_map$std_col)
     rename_vec <- rename_vec[rename_vec %in% names(raw)]  # only present columns
@@ -162,6 +168,36 @@ process_fasom_gdx <- function(force = FALSE) {
     }
 
     readr::write_csv(df, dest)
+
+    # Per-entry summary of what the mapping did, emitted as one message so
+    # the block stays intact in the console: which FASOM_col rows were
+    # ingested, which were not, and how many rows landed in the CSV.
+    # `map_flag` targets are matched but deliberately dropped above.
+    matched_labels <- paste0(
+      matched_map$raw_col, " -> ", matched_map$std_col,
+      ifelse(matched_map$std_col == "map_flag", " (dropped)", ""))
+    log_lines <- sprintf("    mapped %d of %d FASOM_col rows: %s",
+                         nrow(matched_map), nrow(entry_col_map),
+                         if (length(matched_labels) > 0) {
+                           paste(matched_labels, collapse = ", ")
+                         } else {
+                           "(none)"
+                         })
+    if (nrow(unmatched_map) > 0) {
+      log_lines <- c(log_lines,
+                     sprintf("    unmatched FASOM_col rows (no such GDX column): %s",
+                             paste0(unmatched_map$raw_col, " -> ",
+                                    unmatched_map$std_col, collapse = ", ")))
+    }
+    if (length(unknown_cols) > 0) {
+      log_lines <- c(log_lines,
+                     sprintf("    unmapped GDX columns (dropped): %s",
+                             paste(unknown_cols, collapse = ", ")))
+    }
+    log_lines <- c(log_lines,
+                   sprintf("    wrote %d rows x %d columns: %s",
+                           nrow(df), ncol(df), paste(names(df), collapse = ", ")))
+    message(paste(log_lines, collapse = "\n"))
   }
 
   message("FASOM GDX processing complete.")
