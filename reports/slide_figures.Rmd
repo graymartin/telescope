@@ -99,7 +99,7 @@ df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v5_2026/LandTransfer_Cumulati
 
 df_net_line <- df %>% 
   dplyr::filter(year <= 2060) %>% 
-  dplyr::filter(scenario == "BASE") %>%  
+  dplyr::filter(scenario == "75ppb") %>%  
   group_by(scenario, year, land_from, region) %>% 
   summarize(floor = sum(value[value < 0], na.rm = TRUE),
             value = sum(value, na.rm = TRUE)) %>% 
@@ -179,7 +179,7 @@ plot <- telescope::plotting(
   fb_regions = "Total",
   fb_models = "2026_IASD_RYG_v5_2026",
   fb_years = year_range,
-  fb_scenarios = c("BASE"), 
+  fb_scenarios = c("75ppb"), 
   fb_variable = c(
     "CroplandPasture",
     "CRPProgram",
