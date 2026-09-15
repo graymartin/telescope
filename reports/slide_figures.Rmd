@@ -97,6 +97,18 @@ df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulati
   ungroup() %>% 
   mutate(region = "Total")
 
+df_net_line <- df %>% 
+  dplyr::filter(year <= 2060) %>% 
+  dplyr::filter(scenario == "BASE") %>%  
+  group_by(scenario, year, land_from, region) %>% 
+  summarize(floor = sum(value[value < 0], na.rm = TRUE),
+            value = sum(value, na.rm = TRUE)) %>% 
+  group_by(scenario, land_from) %>% 
+  mutate(floor = min(floor, na.rm = TRUE)*1.1) %>% 
+  ungroup() %>% 
+  mutate(label = format(value, digits = 4)) %>% 
+  mutate(variable = "Net")
+
 plot <- telescope::plotting(
   df = df,
   figtype = "stacked_bar",
@@ -125,13 +137,72 @@ plot <- telescope::plotting(
   fb_options = "Start y axis at 0",
   fb_view = "levels",
   fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulative.csv"
-)
+) + 
+  labs(fill = "Transfer To/From") +
+  geom_label(data = df_net_line, aes(label = label, y = floor), size = 2.5, fill = "wheat") 
+
+# + geom_point(data = df_net_line, size = 1, shape = 1, color = "black")
+
+print(plot)
+```
+
+```{r, cumulative-land-transfer-net}
+cap_first <- function(x) {
+  paste0(toupper(substr(x, 1, 1)), substr(x, 2, nchar(x)))
+}
+
+df <- telescope::read_dataset("FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulative.csv") %>% 
+  mutate(change = case_when(stringr::str_starts(variable, stringr::coll("To", ignore_case = TRUE)) ~ "Loss",
+                               stringr::str_starts(variable, stringr::coll("From", ignore_case = TRUE)) ~ "Gain",
+                               TRUE ~ "Flag")) %>% 
+  mutate(variable = case_when(stringr::str_starts(variable, stringr::coll("To", ignore_case = TRUE)) ~ cap_first(gsub("To", "", cap_first(variable), ignore.case = TRUE)),
+                              stringr::str_starts(variable, stringr::coll("From", ignore_case = TRUE)) ~ cap_first(gsub("From", "", cap_first(variable), ignore.case = TRUE)),
+                               TRUE ~ "Flag")) %>% 
+  mutate(value = case_when(change == "Loss" ~ -value,
+                           TRUE ~ value)) %>% 
+  mutate(variable = case_when(variable == "Crop" ~ "Cropland",
+                              TRUE ~ variable)) %>% 
+  group_by(scenario, variable, year, datasrc, unit, land_from) %>%
+  summarize(value = sum(value, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  mutate(region = "Total")
+
+plot <- telescope::plotting(
+  df = df,
+  figtype = "stacked_bar",
+  fb_title_name = "Net Cumulative Land Transfers",
+  fb_subtitle = "Baseline scenario",
+  fb_figure_no = "",
+  fb_x = "year",
+  fb_y = "value",
+  fb_color = "variable",
+  fb_regions = "Total",
+  fb_models = "2026_IASD_RYG_v4_2026",
+  fb_years = year_range,
+  fb_scenarios = c("BASE"), 
+  fb_variable = c(
+    "CroplandPasture",
+    "CRPProgram",
+    "Cropland",
+    "Forest",
+    "Pasture", 
+    "Development"
+  ),
+  fb_facet1 = "land_from",
+  fb_labels = TRUE,
+  fb_y_title = "Value",
+  fb_y_units = "thousand acres",
+  fb_options = "Start y axis at 0",
+  fb_view = "levels",
+  fb_caption = "Source: FASOM/2026_IASD_RYG_v4_2026/LandTransfer_Cumulative.csv"
+) + labs(fill = "Transfer To/From")
 
 print(plot)
 ```
 
 
 ## Crops
+
 ### Crop Harvested Area
 
 ```{r, crop-harvested-area}
@@ -279,6 +350,7 @@ print(plot)
 ```
 
 ## Forest
+
 ### Forest Area
 
 ```{r, forest-area}
@@ -325,6 +397,10 @@ plot <- telescope::plotting(
 
 print(plot)
 ```
+
+### Forest Area Harvested
+
+### Forest Harvest to Commodity
 
 ### Forest Production
 
@@ -492,7 +568,8 @@ print(plot)
 ```
 
 
-# Other Slides
+# Other/Deprecated
+
 ## Ozone Inputs
 
 ```{r load-ozone-data, message=FALSE, warning=FALSE, include=FALSE}
@@ -603,6 +680,7 @@ plot <- telescope::plotting(
 
 print(plot)
 ```
+
 ### Scenarios
 
 ```{r, ozone-yield-scenario}
